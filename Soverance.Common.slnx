@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Soverance.Auth/Soverance.Auth.csproj" />
+  <Project Path="src/Soverance.Data/Soverance.Data.csproj" />
+</Solution>

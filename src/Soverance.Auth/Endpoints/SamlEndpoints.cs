@@ -3,8 +3,6 @@ using ITfoxtec.Identity.Saml2;
 using ITfoxtec.Identity.Saml2.MvcCore;
 using ITfoxtec.Identity.Saml2.Schemas;
 using ITfoxtec.Identity.Saml2.Schemas.Metadata;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -34,9 +32,10 @@ public static class SamlEndpoints
         // GET /api/auth/saml/login
         app.MapGet("/api/auth/saml/login", async (DbContext db, HttpContext httpContext) =>
         {
+            var handler = httpContext.RequestServices.GetRequiredService<ISamlSignInHandler>();
             var config = await db.Set<SamlConfig>().FirstOrDefaultAsync();
             if (config == null || !config.IsEnabled)
-                return Results.Redirect("/login?error=saml_disabled");
+                return Results.Redirect($"{handler.ErrorRedirectBase}?error=saml_disabled");
 
             var saml2Config = SamlService.BuildSaml2Configuration(config, httpContext);
 
@@ -53,11 +52,12 @@ public static class SamlEndpoints
         // POST /api/auth/saml/acs
         app.MapPost("/api/auth/saml/acs", async (DbContext db, HttpContext httpContext) =>
         {
+            var handler = httpContext.RequestServices.GetRequiredService<ISamlSignInHandler>();
             var config = await db.Set<SamlConfig>()
                 .Include(c => c.RoleMappings)
                 .FirstOrDefaultAsync();
             if (config == null || !config.IsEnabled)
-                return Results.Redirect("/login?error=saml_disabled");
+                return Results.Redirect($"{handler.ErrorRedirectBase}?error=saml_disabled");
 
             try
             {
@@ -69,7 +69,7 @@ public static class SamlEndpoints
                 binding.ReadSamlResponse(genericRequest, saml2AuthnResponse);
 
                 if (saml2AuthnResponse.Status != Saml2StatusCodes.Success)
-                    return Results.Redirect("/login?error=saml_failed");
+                    return Results.Redirect($"{handler.ErrorRedirectBase}?error=saml_failed");
 
                 var claimsIdentity = saml2AuthnResponse.ClaimsIdentity;
 
@@ -77,7 +77,7 @@ public static class SamlEndpoints
                     .FirstOrDefault(c => c.Type == NameClaim);
 
                 if (usernameClaim == null || string.IsNullOrWhiteSpace(usernameClaim.Value))
-                    return Results.Redirect("/login?error=no_username");
+                    return Results.Redirect($"{handler.ErrorRedirectBase}?error=no_username");
 
                 var username = usernameClaim.Value;
 
@@ -107,7 +107,7 @@ public static class SamlEndpoints
                 if (user == null)
                 {
                     if (!config.AutoProvision)
-                        return Results.Redirect("/login?error=no_account");
+                        return Results.Redirect($"{handler.ErrorRedirectBase}?error=no_account");
 
                     user = new User
                     {
@@ -131,27 +131,16 @@ public static class SamlEndpoints
                 }
 
                 if (!user.IsEnabled)
-                    return Results.Redirect("/login?error=disabled");
+                    return Results.Redirect($"{handler.ErrorRedirectBase}?error=disabled");
 
-                var claims = new List<Claim>
-                {
-                    new(ClaimTypes.Name, user.Username),
-                    new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                    new(ClaimTypes.Role, user.Role.ToString())
-                };
-
-                var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-                var principal = new ClaimsPrincipal(identity);
-
-                await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
-                return Results.Redirect("/settings");
+                return await handler.HandleSignInAsync(httpContext, user);
             }
             catch (Exception ex)
             {
                 var logger = httpContext.RequestServices.GetRequiredService<ILoggerFactory>()
                     .CreateLogger("Soverance.Auth.Endpoints.SamlEndpoints");
                 logger.LogError(ex, "SAML ACS processing failed");
-                return Results.Redirect("/login?error=saml_failed");
+                return Results.Redirect($"{handler.ErrorRedirectBase}?error=saml_failed");
             }
         }).DisableAntiforgery();
 

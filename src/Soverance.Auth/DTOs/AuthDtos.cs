@@ -39,6 +39,12 @@ public class RefreshRequest
     public string RefreshToken { get; set; } = string.Empty;
 }
 
+public class SamlExchangeRequest
+{
+    [Required]
+    public string Code { get; set; } = string.Empty;
+}
+
 public class AuthResponse
 {
     public string AccessToken { get; set; } = string.Empty;

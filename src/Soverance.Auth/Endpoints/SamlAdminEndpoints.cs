@@ -75,7 +75,7 @@ public static class SamlAdminEndpoints
             }
 
             await db.SaveChangesAsync();
-            return Results.Ok();
+            return Results.NoContent();
         }).RequireAuthorization(policy => policy.RequireRole("Admin"));
 
         // POST /api/admin/saml/validate-certificate

@@ -20,6 +20,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Username).HasMaxLength(64).IsRequired();
         builder.Property(u => u.PasswordHash).HasMaxLength(256);
         builder.Property(u => u.ApiKey).HasMaxLength(128);
+        builder.Property(u => u.ApiKeyCreatedAt);
         builder.Property(u => u.OAuthProvider).HasMaxLength(32);
         builder.Property(u => u.OAuthId).HasMaxLength(256);
         builder.Property(u => u.Role)

@@ -58,6 +58,7 @@ public class UserProfileResponse
     public string Email { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public bool HasApiKey { get; set; }
+    public DateTimeOffset? ApiKeyCreatedAt { get; set; }
     public string Role { get; set; } = string.Empty;
     public string? OAuthProvider { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

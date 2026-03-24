@@ -13,4 +13,5 @@ public class ForumPost
     public DateTimeOffset? UpdatedAt { get; set; }
     public ForumThread Thread { get; set; } = null!;
     public List<ForumVote> Votes { get; set; } = [];
+    public List<ForumAttachment> Attachments { get; set; } = [];
 }

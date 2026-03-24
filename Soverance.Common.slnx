@@ -1,4 +1,6 @@
 <Solution>
   <Project Path="src/Soverance.Auth/Soverance.Auth.csproj" />
   <Project Path="src/Soverance.Data/Soverance.Data.csproj" />
+  <Project Path="src/Soverance.Forum/Soverance.Forum.csproj" />
+  <Project Path="tests/Soverance.Forum.Tests/Soverance.Forum.Tests.csproj" />
 </Solution>

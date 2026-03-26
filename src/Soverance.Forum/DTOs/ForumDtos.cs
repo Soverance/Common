@@ -10,7 +10,7 @@ public record UpdatePostRequest(string Body);
 // Response DTOs
 public record CategoryResponse(
     int Id, string Name, string Slug, string Description,
-    int DisplayOrder, int ThreadCount, DateTimeOffset? LastActivityAt);
+    int DisplayOrder, bool IsSystem, int ThreadCount, DateTimeOffset? LastActivityAt);
 
 public record ThreadSummaryResponse(
     int Id, string Title, string Slug, bool IsPinned, bool IsLocked,

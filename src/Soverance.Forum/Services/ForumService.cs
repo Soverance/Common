@@ -18,10 +18,12 @@ public class ForumService : IForumService
     public async Task<List<CategoryResponse>> GetCategoriesAsync()
     {
         return await _db.Set<ForumCategory>()
-            .OrderBy(c => c.DisplayOrder)
+            .OrderByDescending(c => c.IsSystem)
+            .ThenBy(c => c.DisplayOrder)
             .ThenBy(c => c.Name)
             .Select(c => new CategoryResponse(
                 c.Id, c.Name, c.Slug, c.Description, c.DisplayOrder,
+                c.IsSystem,
                 c.Threads.Count,
                 c.Threads.SelectMany(t => t.Posts).Max(p => (DateTimeOffset?)p.CreatedAt)))
             .ToListAsync();
@@ -33,6 +35,7 @@ public class ForumService : IForumService
             .Where(c => c.Slug == slug)
             .Select(c => new CategoryResponse(
                 c.Id, c.Name, c.Slug, c.Description, c.DisplayOrder,
+                c.IsSystem,
                 c.Threads.Count,
                 c.Threads.SelectMany(t => t.Posts).Max(p => (DateTimeOffset?)p.CreatedAt)))
             .FirstOrDefaultAsync();
@@ -56,7 +59,7 @@ public class ForumService : IForumService
 
         return new CategoryResponse(
             category.Id, category.Name, category.Slug, category.Description,
-            category.DisplayOrder, 0, null);
+            category.DisplayOrder, false, 0, null);
     }
 
     public async Task<CategoryResponse?> UpdateCategoryAsync(int id, UpdateCategoryRequest request)
@@ -77,7 +80,7 @@ public class ForumService : IForumService
 
         return new CategoryResponse(
             category.Id, category.Name, category.Slug, category.Description,
-            category.DisplayOrder, threadCount, lastActivity);
+            category.DisplayOrder, category.IsSystem, threadCount, lastActivity);
     }
 
     public async Task<bool> DeleteCategoryAsync(int id)

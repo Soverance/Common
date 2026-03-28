@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.4" />
     <PackageReference Include="ITfoxtec.Identity.Saml2" Version="4.10.1" />
     <PackageReference Include="ITfoxtec.Identity.Saml2.MvcCore" Version="4.10.1" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />

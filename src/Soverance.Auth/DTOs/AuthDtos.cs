@@ -61,5 +61,11 @@ public class UserProfileResponse
     public DateTimeOffset? ApiKeyCreatedAt { get; set; }
     public string Role { get; set; } = string.Empty;
     public string? OAuthProvider { get; set; }
+    public string? DefaultServer { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+public class UpdateDefaultServerRequest
+{
+    public string? Server { get; set; }
 }

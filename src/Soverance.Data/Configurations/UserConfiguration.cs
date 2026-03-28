@@ -23,6 +23,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.ApiKeyCreatedAt);
         builder.Property(u => u.OAuthProvider).HasMaxLength(32);
         builder.Property(u => u.OAuthId).HasMaxLength(256);
+        builder.Property(u => u.DefaultServer).HasMaxLength(64);
         builder.Property(u => u.Role)
             .HasConversion<string>()
             .HasMaxLength(16)

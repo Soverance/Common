@@ -12,6 +12,7 @@ public class User
     public string? OAuthId { get; set; }
     public UserRole Role { get; set; } = UserRole.Member;
     public bool IsSystemAccount { get; set; }
+    public string? DefaultServer { get; set; }
     public bool IsEnabled { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

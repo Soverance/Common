@@ -1,7 +1,3 @@
-# Project-specific #
-######################
-src/Vanalytics.Api/appsettings.Development.json
-
 # Visual Studio client-specific #
 ######################
 .vs
@@ -62,3 +58,4 @@ node_modules/
 !.claude/commands/
 !.claude/commands/**
 .superpowers/*
+docs/*

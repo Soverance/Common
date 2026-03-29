@@ -52,6 +52,8 @@ Reusable React TypeScript components, currently providing a SAML admin configura
 git submodule add https://github.com/Soverance/Common.git lib/Common
 ```
 
+**Important:** When updating the Common submodule, check if any shared models (`User`, `SamlConfig`, `RefreshToken`, etc.) have changed. If so, you must generate an EF migration in **every consuming project** (soverance.com and Vanalytics) to keep their databases in sync. Missing migrations will cause runtime SQL errors.
+
 Then add project references in your `.csproj`:
 
 ```xml

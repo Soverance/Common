@@ -60,6 +60,7 @@ public class UserProfileResponse
     public bool HasApiKey { get; set; }
     public DateTimeOffset? ApiKeyCreatedAt { get; set; }
     public string Role { get; set; } = string.Empty;
+    public string? AvatarUrl { get; set; }
     public string? OAuthProvider { get; set; }
     public string? DefaultServer { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

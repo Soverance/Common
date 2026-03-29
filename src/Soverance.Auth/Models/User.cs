@@ -8,6 +8,7 @@ public class User
     public string? PasswordHash { get; set; }
     public string? ApiKey { get; set; }
     public DateTimeOffset? ApiKeyCreatedAt { get; set; }
+    public string? AvatarUrl { get; set; }
     public string? OAuthProvider { get; set; }
     public string? OAuthId { get; set; }
     public UserRole Role { get; set; } = UserRole.Member;

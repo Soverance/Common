@@ -106,7 +106,7 @@ public static class SamlEndpoints
                     : UserRole.Member;
 
                 var user = await db.Set<User>()
-                    .FirstOrDefaultAsync(u => u.Username == username);
+                    .FirstOrDefaultAsync(u => u.Email == username);
 
                 if (user == null)
                 {

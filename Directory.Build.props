@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <Authors>Soverance Studios</Authors>
+    <Company>Soverance Studios</Company>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/Soverance/Common</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+</Project>

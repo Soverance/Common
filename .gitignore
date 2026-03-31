@@ -51,6 +51,8 @@ Thumbs.db
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+src/Soverance.Web/dist/
+src/Soverance.Web/node_modules/
 
 # Claude CLI
 .claude/*

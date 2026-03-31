@@ -4,6 +4,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PackageId>Soverance.Auth</PackageId>
+    <Version>1.0.0</Version>
+    <Description>Auth models, services, SAML SSO, JWT, and BCrypt for Soverance applications</Description>
+    <PackageTags>soverance auth saml jwt</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

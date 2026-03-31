@@ -1,0 +1,234 @@
+# Publishes NuGet packages to GitHub Packages when their source changes.
+# Detects which packages changed and only publishes those.
+# Auth changes also trigger a Data republish (dependency chain).
+
+name: Publish NuGet Packages
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      auth_changed: ${{ steps.changes.outputs.auth_changed }}
+      data_changed: ${{ steps.changes.outputs.data_changed }}
+      forum_changed: ${{ steps.changes.outputs.forum_changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed paths
+        id: changes
+        run: |
+          AUTH_CHANGED=false
+          DATA_CHANGED=false
+          FORUM_CHANGED=false
+
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+
+          if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Auth/'; then
+            AUTH_CHANGED=true
+          fi
+          if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Data/'; then
+            DATA_CHANGED=true
+          fi
+          if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Forum/'; then
+            FORUM_CHANGED=true
+          fi
+
+          # Dependency chain: Auth changes require Data republish
+          if [ "$AUTH_CHANGED" = "true" ]; then
+            DATA_CHANGED=true
+          fi
+
+          echo "auth_changed=$AUTH_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "data_changed=$DATA_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "forum_changed=$FORUM_CHANGED" >> "$GITHUB_OUTPUT"
+
+          echo "Auth changed: $AUTH_CHANGED"
+          echo "Data changed: $DATA_CHANGED"
+          echo "Forum changed: $FORUM_CHANGED"
+
+  publish-auth:
+    name: Publish Soverance.Auth
+    needs: detect-changes
+    if: needs.detect-changes.outputs.auth_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10.0 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Determine version
+        id: version
+        run: |
+          LATEST_TAG=$(git tag -l 'auth/v*' --sort=-v:refname | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="1.0.0"
+          else
+            CURRENT="${LATEST_TAG#auth/v}"
+            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+            MINOR=$(echo "$CURRENT" | cut -d. -f2)
+            PATCH=$(echo "$CURRENT" | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing Soverance.Auth v$VERSION"
+
+      - name: Pack
+        run: >
+          dotnet pack src/Soverance.Auth/Soverance.Auth.csproj
+          --configuration Release
+          -p:Version=${{ steps.version.outputs.version }}
+          --output ./nupkg
+
+      - name: Push to GitHub Packages
+        run: >
+          dotnet nuget push ./nupkg/Soverance.Auth.*.nupkg
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --source "https://nuget.pkg.github.com/Soverance/index.json"
+          --skip-duplicate
+
+      - name: Create and push tag
+        run: |
+          git tag "auth/v${{ steps.version.outputs.version }}"
+          git push origin "auth/v${{ steps.version.outputs.version }}"
+
+  publish-data:
+    name: Publish Soverance.Data
+    needs: [detect-changes, publish-auth]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.data_changed == 'true' &&
+      (needs.publish-auth.result == 'success' || needs.publish-auth.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10.0 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          source-url: https://nuget.pkg.github.com/Soverance/index.json
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine version
+        id: version
+        run: |
+          LATEST_TAG=$(git tag -l 'data/v*' --sort=-v:refname | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="1.0.0"
+          else
+            CURRENT="${LATEST_TAG#data/v}"
+            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+            MINOR=$(echo "$CURRENT" | cut -d. -f2)
+            PATCH=$(echo "$CURRENT" | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing Soverance.Data v$VERSION"
+
+      - name: Update Auth dependency version
+        if: needs.publish-auth.outputs.version != ''
+        run: |
+          AUTH_VERSION=${{ needs.publish-auth.outputs.version }}
+          sed -i "s|<PackageReference Include=\"Soverance.Auth\" Version=\"[^\"]*\"|<PackageReference Include=\"Soverance.Auth\" Version=\"$AUTH_VERSION\"|" \
+            src/Soverance.Data/Soverance.Data.csproj
+
+      - name: Pack
+        run: >
+          dotnet pack src/Soverance.Data/Soverance.Data.csproj
+          --configuration Release
+          -p:Version=${{ steps.version.outputs.version }}
+          --output ./nupkg
+
+      - name: Push to GitHub Packages
+        run: >
+          dotnet nuget push ./nupkg/Soverance.Data.*.nupkg
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --source "https://nuget.pkg.github.com/Soverance/index.json"
+          --skip-duplicate
+
+      - name: Create and push tag
+        run: |
+          git tag "data/v${{ steps.version.outputs.version }}"
+          git push origin "data/v${{ steps.version.outputs.version }}"
+
+  publish-forum:
+    name: Publish Soverance.Forum
+    needs: detect-changes
+    if: needs.detect-changes.outputs.forum_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10.0 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Determine version
+        id: version
+        run: |
+          LATEST_TAG=$(git tag -l 'forum/v*' --sort=-v:refname | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="1.0.0"
+          else
+            CURRENT="${LATEST_TAG#forum/v}"
+            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+            MINOR=$(echo "$CURRENT" | cut -d. -f2)
+            PATCH=$(echo "$CURRENT" | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing Soverance.Forum v$VERSION"
+
+      - name: Pack
+        run: >
+          dotnet pack src/Soverance.Forum/Soverance.Forum.csproj
+          --configuration Release
+          -p:Version=${{ steps.version.outputs.version }}
+          --output ./nupkg
+
+      - name: Push to GitHub Packages
+        run: >
+          dotnet nuget push ./nupkg/Soverance.Forum.*.nupkg
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --source "https://nuget.pkg.github.com/Soverance/index.json"
+          --skip-duplicate
+
+      - name: Create and push tag
+        run: |
+          git tag "forum/v${{ steps.version.outputs.version }}"
+          git push origin "forum/v${{ steps.version.outputs.version }}"

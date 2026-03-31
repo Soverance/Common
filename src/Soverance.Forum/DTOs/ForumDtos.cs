@@ -26,3 +26,5 @@ public record PostResponse(
     long Id, Guid AuthorId, string? Body, bool IsEdited, bool IsDeleted,
     int VoteCount, bool CurrentUserVoted,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
+
+public enum PurgeResult { NotFound, PostPurged, ThreadPurged }

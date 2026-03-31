@@ -350,9 +350,51 @@ public class ForumService : IForumService
         return (voteCount, userVoted);
     }
 
-    public Task<PurgeResult> PurgePostAsync(long postId, Func<string, Task>? deleteAttachment = null)
+    public async Task<PurgeResult> PurgePostAsync(long postId, Func<string, Task>? deleteAttachment = null)
     {
-        throw new NotImplementedException();
+        var post = await _db.Set<ForumPost>()
+            .Include(p => p.Thread)
+                .ThenInclude(t => t.Posts.OrderBy(pp => pp.CreatedAt).ThenBy(pp => pp.Id).Take(1))
+            .Include(p => p.Attachments)
+            .FirstOrDefaultAsync(p => p.Id == postId);
+
+        if (post == null) return PurgeResult.NotFound;
+
+        var firstPostInThread = post.Thread.Posts.First();
+        var isFirstPost = post.Id == firstPostInThread.Id;
+
+        if (isFirstPost)
+        {
+            // Purge entire thread — collect all attachments first
+            var allAttachments = await _db.Set<ForumAttachment>()
+                .Where(a => a.Post != null && a.Post.ThreadId == post.ThreadId)
+                .ToListAsync();
+
+            if (deleteAttachment != null)
+            {
+                foreach (var att in allAttachments)
+                    await deleteAttachment(att.StoragePath);
+            }
+
+            _db.Set<ForumAttachment>().RemoveRange(allAttachments);
+            _db.Set<ForumThread>().Remove(post.Thread);
+            await _db.SaveChangesAsync();
+            return PurgeResult.ThreadPurged;
+        }
+        else
+        {
+            // Purge single post — delete its attachments
+            if (deleteAttachment != null)
+            {
+                foreach (var att in post.Attachments)
+                    await deleteAttachment(att.StoragePath);
+            }
+
+            _db.Set<ForumAttachment>().RemoveRange(post.Attachments);
+            _db.Set<ForumPost>().Remove(post);
+            await _db.SaveChangesAsync();
+            return PurgeResult.PostPurged;
+        }
     }
 
     // === Helpers ===

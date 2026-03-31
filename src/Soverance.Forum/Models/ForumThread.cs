@@ -9,6 +9,8 @@ public class ForumThread
     public string Slug { get; set; } = string.Empty;
     public bool IsPinned { get; set; }
     public bool IsLocked { get; set; }
+    public bool IsDeleted { get; set; }
+    public Guid? DeletedBy { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset LastPostAt { get; set; }
     public ForumCategory Category { get; set; } = null!;

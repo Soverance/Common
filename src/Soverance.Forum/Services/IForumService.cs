@@ -14,11 +14,14 @@ public interface IForumService
     // Threads
     Task<(List<ThreadSummaryResponse> Threads, bool HasMore)> GetThreadsAsync(
         string categorySlug, long? afterLastPostAtTicks = null, int? afterId = null, int limit = 25, bool isModerator = false);
-    Task<ThreadDetailResponse?> GetThreadBySlugAsync(string categorySlug, string threadSlug);
+    Task<ThreadDetailResponse?> GetThreadBySlugAsync(string categorySlug, string threadSlug, bool isModerator = false);
     Task<ThreadDetailResponse?> CreateThreadAsync(
         string categorySlug, CreateThreadRequest request, Guid authorId);
     Task<bool> TogglePinAsync(int threadId);
     Task<bool> ToggleLockAsync(int threadId);
+    Task<bool> DeleteThreadAsync(int threadId, Guid callerId, bool isModerator);
+    Task<bool> RestoreThreadAsync(int threadId);
+    Task<bool> PurgeThreadAsync(int threadId, Func<string, Task>? deleteAttachment = null);
 
     // Posts
     Task<(List<PostResponse> Posts, bool HasMore)> GetPostsAsync(

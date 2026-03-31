@@ -24,8 +24,8 @@ public class ForumService : IForumService
             .Select(c => new CategoryResponse(
                 c.Id, c.Name, c.Slug, c.Description, c.DisplayOrder,
                 c.IsSystem,
-                c.Threads.Count,
-                c.Threads.SelectMany(t => t.Posts).Max(p => (DateTimeOffset?)p.CreatedAt)))
+                c.Threads.Count(t => !t.IsDeleted),
+                c.Threads.Where(t => !t.IsDeleted).SelectMany(t => t.Posts).Max(p => (DateTimeOffset?)p.CreatedAt)))
             .ToListAsync();
     }
 
@@ -36,8 +36,8 @@ public class ForumService : IForumService
             .Select(c => new CategoryResponse(
                 c.Id, c.Name, c.Slug, c.Description, c.DisplayOrder,
                 c.IsSystem,
-                c.Threads.Count,
-                c.Threads.SelectMany(t => t.Posts).Max(p => (DateTimeOffset?)p.CreatedAt)))
+                c.Threads.Count(t => !t.IsDeleted),
+                c.Threads.Where(t => !t.IsDeleted).SelectMany(t => t.Posts).Max(p => (DateTimeOffset?)p.CreatedAt)))
             .FirstOrDefaultAsync();
     }
 
@@ -107,11 +107,16 @@ public class ForumService : IForumService
         if (category == null) return ([], false);
 
         // Pinned threads first (always shown, not affected by cursor)
-        var pinned = await _db.Set<ForumThread>()
-            .Where(t => t.CategoryId == category.Id && t.IsPinned)
+        var pinnedQuery = _db.Set<ForumThread>()
+            .Where(t => t.CategoryId == category.Id && t.IsPinned);
+
+        if (!isModerator)
+            pinnedQuery = pinnedQuery.Where(t => !t.IsDeleted);
+
+        var pinned = await pinnedQuery
             .OrderByDescending(t => t.LastPostAt)
             .Select(t => new ThreadSummaryResponse(
-                t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked,
+                t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked, t.IsDeleted,
                 t.AuthorId,
                 isModerator
                     ? t.Posts.Count - 1
@@ -123,6 +128,9 @@ public class ForumService : IForumService
         // Non-pinned threads with cursor pagination
         var query = _db.Set<ForumThread>()
             .Where(t => t.CategoryId == category.Id && !t.IsPinned);
+
+        if (!isModerator)
+            query = query.Where(t => !t.IsDeleted);
 
         if (afterLastPostAtTicks != null && afterId != null)
         {
@@ -137,7 +145,7 @@ public class ForumService : IForumService
             .ThenByDescending(t => t.Id)
             .Take(limit + 1)
             .Select(t => new ThreadSummaryResponse(
-                t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked,
+                t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked, t.IsDeleted,
                 t.AuthorId,
                 isModerator
                     ? t.Posts.Count - 1
@@ -156,13 +164,18 @@ public class ForumService : IForumService
         return (threads, hasMore);
     }
 
-    public async Task<ThreadDetailResponse?> GetThreadBySlugAsync(string categorySlug, string threadSlug)
+    public async Task<ThreadDetailResponse?> GetThreadBySlugAsync(string categorySlug, string threadSlug, bool isModerator = false)
     {
-        return await _db.Set<ForumThread>()
-            .Where(t => t.Category.Slug == categorySlug && t.Slug == threadSlug)
+        var query = _db.Set<ForumThread>()
+            .Where(t => t.Category.Slug == categorySlug && t.Slug == threadSlug);
+
+        if (!isModerator)
+            query = query.Where(t => !t.IsDeleted);
+
+        return await query
             .Select(t => new ThreadDetailResponse(
                 t.Id, t.Title, t.Slug, t.CategoryId, t.Category.Name, t.Category.Slug,
-                t.IsPinned, t.IsLocked, t.AuthorId,
+                t.IsPinned, t.IsLocked, t.IsDeleted, t.AuthorId,
                 t.CreatedAt, t.LastPostAt))
             .FirstOrDefaultAsync();
     }
@@ -205,7 +218,7 @@ public class ForumService : IForumService
 
         return new ThreadDetailResponse(
             thread.Id, thread.Title, thread.Slug, category.Id, category.Name, category.Slug,
-            thread.IsPinned, thread.IsLocked, thread.AuthorId,
+            thread.IsPinned, thread.IsLocked, false, thread.AuthorId,
             thread.CreatedAt, thread.LastPostAt);
     }
 
@@ -225,6 +238,54 @@ public class ForumService : IForumService
         if (thread == null) return false;
 
         thread.IsLocked = !thread.IsLocked;
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> DeleteThreadAsync(int threadId, Guid callerId, bool isModerator)
+    {
+        var thread = await _db.Set<ForumThread>().FindAsync(threadId);
+        if (thread == null || thread.IsDeleted) return false;
+        if (thread.AuthorId != callerId && !isModerator) return false;
+
+        thread.IsDeleted = true;
+        thread.DeletedBy = callerId;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RestoreThreadAsync(int threadId)
+    {
+        var thread = await _db.Set<ForumThread>().FindAsync(threadId);
+        if (thread == null || !thread.IsDeleted) return false;
+
+        thread.IsDeleted = false;
+        thread.DeletedBy = null;
+
+        await _db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> PurgeThreadAsync(int threadId, Func<string, Task>? deleteAttachment = null)
+    {
+        var thread = await _db.Set<ForumThread>()
+            .Include(t => t.Posts)
+                .ThenInclude(p => p.Attachments)
+            .FirstOrDefaultAsync(t => t.Id == threadId);
+
+        if (thread == null) return false;
+
+        var allAttachments = thread.Posts.SelectMany(p => p.Attachments).ToList();
+
+        if (deleteAttachment != null)
+        {
+            foreach (var att in allAttachments)
+                await deleteAttachment(att.StoragePath);
+        }
+
+        _db.Set<ForumAttachment>().RemoveRange(allAttachments);
+        _db.Set<ForumThread>().Remove(thread);
         await _db.SaveChangesAsync();
         return true;
     }

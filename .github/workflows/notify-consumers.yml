@@ -1,7 +1,7 @@
 # After NuGet or npm packages are published, open PRs in consumer repos
 # to bump their package references to the new versions.
 #
-# Requires a PAT with repo scope stored as SUBMODULE_UPDATE_TOKEN
+# Requires a PAT with repo scope stored as CROSS_REPO_PAT
 # (the default GITHUB_TOKEN can't trigger workflows in other repos).
 
 name: Notify Consumers
@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ matrix.repo }}
-          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+          token: ${{ secrets.CROSS_REPO_PAT }}
           ref: ${{ matrix.base_branch }}
           path: consumer
 
@@ -113,7 +113,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           path: consumer
-          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+          token: ${{ secrets.CROSS_REPO_PAT }}
           branch: chore/update-common-packages
           delete-branch: true
           title: "chore: update Common package versions"

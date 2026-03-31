@@ -107,11 +107,11 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           --output ./nupkg
 
-      - name: Push to GitHub Packages
+      - name: Push to NuGet.org
         run: >
           dotnet nuget push ./nupkg/Soverance.Auth.*.nupkg
-          --api-key ${{ secrets.GITHUB_TOKEN }}
-          --source "https://nuget.pkg.github.com/Soverance/index.json"
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source "https://api.nuget.org/v3/index.json"
           --skip-duplicate
 
       - name: Create and push tag
@@ -139,9 +139,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-          source-url: https://nuget.pkg.github.com/Soverance/index.json
-        env:
-          NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Determine version
         id: version
@@ -174,11 +171,11 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           --output ./nupkg
 
-      - name: Push to GitHub Packages
+      - name: Push to NuGet.org
         run: >
           dotnet nuget push ./nupkg/Soverance.Data.*.nupkg
-          --api-key ${{ secrets.GITHUB_TOKEN }}
-          --source "https://nuget.pkg.github.com/Soverance/index.json"
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source "https://api.nuget.org/v3/index.json"
           --skip-duplicate
 
       - name: Create and push tag
@@ -228,11 +225,11 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           --output ./nupkg
 
-      - name: Push to GitHub Packages
+      - name: Push to NuGet.org
         run: >
           dotnet nuget push ./nupkg/Soverance.Forum.*.nupkg
-          --api-key ${{ secrets.GITHUB_TOKEN }}
-          --source "https://nuget.pkg.github.com/Soverance/index.json"
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source "https://api.nuget.org/v3/index.json"
           --skip-duplicate
 
       - name: Create and push tag

@@ -15,6 +15,7 @@ public class ForumThreadConfiguration : IEntityTypeConfiguration<ForumThread>
         builder.HasIndex(t => new { t.CategoryId, t.Slug }).IsUnique();
         builder.Property(t => t.IsPinned).HasDefaultValue(false);
         builder.Property(t => t.IsLocked).HasDefaultValue(false);
+        builder.Property(t => t.IsDeleted).HasDefaultValue(false);
         builder.HasIndex(t => t.LastPostAt);
         builder.HasMany(t => t.Posts).WithOne(p => p.Thread).HasForeignKey(p => p.ThreadId).OnDelete(DeleteBehavior.Cascade);
     }

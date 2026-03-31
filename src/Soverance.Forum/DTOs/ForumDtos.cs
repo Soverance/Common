@@ -13,13 +13,13 @@ public record CategoryResponse(
     int DisplayOrder, bool IsSystem, int ThreadCount, DateTimeOffset? LastActivityAt);
 
 public record ThreadSummaryResponse(
-    int Id, string Title, string Slug, bool IsPinned, bool IsLocked,
+    int Id, string Title, string Slug, bool IsPinned, bool IsLocked, bool IsDeleted,
     Guid AuthorId, int ReplyCount, int VoteCount,
     DateTimeOffset CreatedAt, DateTimeOffset LastPostAt);
 
 public record ThreadDetailResponse(
     int Id, string Title, string Slug, int CategoryId, string CategoryName, string CategorySlug,
-    bool IsPinned, bool IsLocked, Guid AuthorId,
+    bool IsPinned, bool IsLocked, bool IsDeleted, Guid AuthorId,
     DateTimeOffset CreatedAt, DateTimeOffset LastPostAt);
 
 public record PostResponse(

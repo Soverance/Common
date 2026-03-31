@@ -306,7 +306,7 @@ public class ForumServiceTests : IDisposable
         var deleted = await _service.DeletePostAsync(postId, authorId, false);
         Assert.True(deleted);
 
-        var (postsAfter, _) = await _service.GetPostsAsync(thread.Id);
+        var (postsAfter, _) = await _service.GetPostsAsync(thread.Id, isModerator: true);
         Assert.Single(postsAfter);
         Assert.True(postsAfter[0].IsDeleted);
         Assert.Null(postsAfter[0].Body);

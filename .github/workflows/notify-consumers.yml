@@ -1,0 +1,132 @@
+# After NuGet or npm packages are published, open PRs in consumer repos
+# to bump their package references to the new versions.
+#
+# Requires a PAT with repo scope stored as SUBMODULE_UPDATE_TOKEN
+# (the default GITHUB_TOKEN can't trigger workflows in other repos).
+
+name: Notify Consumers
+
+on:
+  workflow_run:
+    workflows: ["Publish NuGet Packages", "Publish npm Package"]
+    types: [completed]
+
+jobs:
+  update-consumers:
+    name: Update ${{ matrix.repo }}
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - repo: Soverance/soverance.com
+            base_branch: master
+            nuget_projects: "soverance.com/soverance.com.csproj"
+            npm_project: "soverance.com/ClientApp/package.json"
+          - repo: Soverance/Vanalytics
+            base_branch: main
+            nuget_projects: "src/Vanalytics.Api/Vanalytics.Api.csproj src/Vanalytics.Data/Vanalytics.Data.csproj src/Vanalytics.Core/Vanalytics.Core.csproj"
+            npm_project: "src/Vanalytics.Web/package.json"
+
+    steps:
+      - name: Checkout Common to read tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: common
+
+      - name: Read latest package versions from tags
+        id: versions
+        working-directory: common
+        run: |
+          get_version() {
+            local prefix=$1
+            local tag=$(git tag -l "${prefix}/v*" --sort=-v:refname | head -n 1)
+            if [ -n "$tag" ]; then
+              echo "${tag#${prefix}/v}"
+            fi
+          }
+          AUTH_VERSION=$(get_version "auth")
+          DATA_VERSION=$(get_version "data")
+          FORUM_VERSION=$(get_version "forum")
+          WEB_VERSION=$(get_version "web")
+
+          echo "auth_version=$AUTH_VERSION" >> "$GITHUB_OUTPUT"
+          echo "data_version=$DATA_VERSION" >> "$GITHUB_OUTPUT"
+          echo "forum_version=$FORUM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "web_version=$WEB_VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "Auth: $AUTH_VERSION, Data: $DATA_VERSION, Forum: $FORUM_VERSION, Web: $WEB_VERSION"
+
+      - name: Checkout consumer repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+          ref: ${{ matrix.base_branch }}
+          path: consumer
+
+      - name: Update NuGet package references
+        working-directory: consumer
+        run: |
+          update_package() {
+            local file=$1
+            local package=$2
+            local version=$3
+            if [ -z "$version" ] || [ ! -f "$file" ]; then return; fi
+            if grep -q "\"$package\"" "$file"; then
+              sed -i "s|<PackageReference Include=\"$package\" Version=\"[^\"]*\"|<PackageReference Include=\"$package\" Version=\"$version\"|g" "$file"
+              echo "Updated $package to $version in $file"
+            fi
+          }
+
+          for proj in ${{ matrix.nuget_projects }}; do
+            update_package "$proj" "Soverance.Auth" "${{ steps.versions.outputs.auth_version }}"
+            update_package "$proj" "Soverance.Data" "${{ steps.versions.outputs.data_version }}"
+            update_package "$proj" "Soverance.Forum" "${{ steps.versions.outputs.forum_version }}"
+          done
+
+      - name: Update npm package references
+        working-directory: consumer
+        run: |
+          WEB_VERSION="${{ steps.versions.outputs.web_version }}"
+          NPM_PROJECT="${{ matrix.npm_project }}"
+          if [ -n "$WEB_VERSION" ] && [ -f "$NPM_PROJECT" ]; then
+            if grep -q "@soverance/web" "$NPM_PROJECT"; then
+              sed -i "s|\"@soverance/web\": \"[^\"]*\"|\"@soverance/web\": \"$WEB_VERSION\"|" "$NPM_PROJECT"
+              echo "Updated @soverance/web to $WEB_VERSION in $NPM_PROJECT"
+            fi
+          fi
+
+      - name: Check for changes
+        id: diff
+        working-directory: consumer
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          path: consumer
+          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+          branch: chore/update-common-packages
+          delete-branch: true
+          title: "chore: update Common package versions"
+          body: |
+            Automated PR to update Soverance Common package references.
+
+            | Package | Version |
+            |---|---|
+            | Soverance.Auth | ${{ steps.versions.outputs.auth_version }} |
+            | Soverance.Data | ${{ steps.versions.outputs.data_version }} |
+            | Soverance.Forum | ${{ steps.versions.outputs.forum_version }} |
+            | @soverance/web | ${{ steps.versions.outputs.web_version }} |
+
+            Triggered by: ${{ github.event.workflow_run.head_commit.message }}
+          commit-message: "chore: update Common packages"
+          base: ${{ matrix.base_branch }}

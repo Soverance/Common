@@ -1,0 +1,90 @@
+# Publishes @soverance/web to GitHub Packages when its source changes.
+
+name: Publish npm Package
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      web_changed: ${{ steps.changes.outputs.web_changed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed paths
+        id: changes
+        run: |
+          WEB_CHANGED=false
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Web/'; then
+            WEB_CHANGED=true
+          fi
+          echo "web_changed=$WEB_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Web changed: $WEB_CHANGED"
+
+  publish-web:
+    name: Publish @soverance/web
+    needs: detect-changes
+    if: needs.detect-changes.outputs.web_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@soverance'
+
+      - name: Determine version
+        id: version
+        run: |
+          LATEST_TAG=$(git tag -l 'web/v*' --sort=-v:refname | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="1.0.0"
+          else
+            CURRENT="${LATEST_TAG#web/v}"
+            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+            MINOR=$(echo "$CURRENT" | cut -d. -f2)
+            PATCH=$(echo "$CURRENT" | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing @soverance/web v$VERSION"
+
+      - name: Install dependencies and build
+        working-directory: src/Soverance.Web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Set version and publish
+        working-directory: src/Soverance.Web
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+          npm publish
+
+      - name: Create and push tag
+        run: |
+          git tag "web/v${{ steps.version.outputs.version }}"
+          git push origin "web/v${{ steps.version.outputs.version }}"

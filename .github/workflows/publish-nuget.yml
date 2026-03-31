@@ -7,6 +7,7 @@ name: Publish NuGet Packages
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -33,21 +34,27 @@ jobs:
           DATA_CHANGED=false
           FORUM_CHANGED=false
 
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-
-          if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Auth/'; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             AUTH_CHANGED=true
-          fi
-          if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Data/'; then
             DATA_CHANGED=true
-          fi
-          if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Forum/'; then
             FORUM_CHANGED=true
-          fi
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
 
-          # Dependency chain: Auth changes require Data republish
-          if [ "$AUTH_CHANGED" = "true" ]; then
-            DATA_CHANGED=true
+            if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Auth/'; then
+              AUTH_CHANGED=true
+            fi
+            if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Data/'; then
+              DATA_CHANGED=true
+            fi
+            if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Forum/'; then
+              FORUM_CHANGED=true
+            fi
+
+            # Dependency chain: Auth changes require Data republish
+            if [ "$AUTH_CHANGED" = "true" ]; then
+              DATA_CHANGED=true
+            fi
           fi
 
           echo "auth_changed=$AUTH_CHANGED" >> "$GITHUB_OUTPUT"

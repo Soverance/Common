@@ -5,6 +5,7 @@ name: Publish npm Package
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -26,9 +27,13 @@ jobs:
         id: changes
         run: |
           WEB_CHANGED=false
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
-          if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Web/'; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             WEB_CHANGED=true
+          else
+            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+            if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Web/'; then
+              WEB_CHANGED=true
+            fi
           fi
           echo "web_changed=$WEB_CHANGED" >> "$GITHUB_OUTPUT"
           echo "Web changed: $WEB_CHANGED"

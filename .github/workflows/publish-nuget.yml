@@ -164,6 +164,21 @@ jobs:
           sed -i "s|<PackageReference Include=\"Soverance.Auth\" Version=\"[^\"]*\"|<PackageReference Include=\"Soverance.Auth\" Version=\"$AUTH_VERSION\"|" \
             src/Soverance.Data/Soverance.Data.csproj
 
+      - name: Wait for Auth package to be indexed on NuGet.org
+        if: needs.publish-auth.outputs.version != ''
+        run: |
+          AUTH_VERSION=${{ needs.publish-auth.outputs.version }}
+          echo "Waiting for Soverance.Auth v$AUTH_VERSION to appear on NuGet.org..."
+          for i in $(seq 1 30); do
+            if dotnet nuget list source | head -1 > /dev/null && \
+               curl -sf "https://api.nuget.org/v3-flatcontainer/soverance.auth/${AUTH_VERSION}/soverance.auth.${AUTH_VERSION}.nupkg" -o /dev/null 2>&1; then
+              echo "Package available after ~$((i * 10)) seconds"
+              break
+            fi
+            echo "Attempt $i/30 - not yet available, waiting 10s..."
+            sleep 10
+          done
+
       - name: Pack
         run: >
           dotnet pack src/Soverance.Data/Soverance.Data.csproj

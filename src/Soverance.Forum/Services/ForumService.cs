@@ -113,7 +113,9 @@ public class ForumService : IForumService
             .Select(t => new ThreadSummaryResponse(
                 t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked,
                 t.AuthorId,
-                isModerator ? t.Posts.Count - 1 : t.Posts.Count(p => !p.IsDeleted) - 1,
+                isModerator
+                    ? t.Posts.Count - 1
+                    : (t.Posts.Count(p => !p.IsDeleted) > 1 ? t.Posts.Count(p => !p.IsDeleted) - 1 : 0),
                 isModerator ? t.Posts.SelectMany(p => p.Votes).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Votes).Count(),
                 t.CreatedAt, t.LastPostAt))
             .ToListAsync();
@@ -137,7 +139,9 @@ public class ForumService : IForumService
             .Select(t => new ThreadSummaryResponse(
                 t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked,
                 t.AuthorId,
-                isModerator ? t.Posts.Count - 1 : t.Posts.Count(p => !p.IsDeleted) - 1,
+                isModerator
+                    ? t.Posts.Count - 1
+                    : (t.Posts.Count(p => !p.IsDeleted) > 1 ? t.Posts.Count(p => !p.IsDeleted) - 1 : 0),
                 isModerator ? t.Posts.SelectMany(p => p.Votes).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Votes).Count(),
                 t.CreatedAt, t.LastPostAt))
             .ToListAsync();

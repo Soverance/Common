@@ -354,14 +354,18 @@ public class ForumService : IForumService
     {
         var post = await _db.Set<ForumPost>()
             .Include(p => p.Thread)
-                .ThenInclude(t => t.Posts.OrderBy(pp => pp.CreatedAt).ThenBy(pp => pp.Id).Take(1))
             .Include(p => p.Attachments)
             .FirstOrDefaultAsync(p => p.Id == postId);
 
         if (post == null) return PurgeResult.NotFound;
 
-        var firstPostInThread = post.Thread.Posts.First();
-        var isFirstPost = post.Id == firstPostInThread.Id;
+        // Query the first post ID separately to avoid EF navigation fixup issues
+        var firstPostId = await _db.Set<ForumPost>()
+            .Where(p => p.ThreadId == post.ThreadId)
+            .OrderBy(p => p.CreatedAt).ThenBy(p => p.Id)
+            .Select(p => p.Id)
+            .FirstAsync();
+        var isFirstPost = post.Id == firstPostId;
 
         if (isFirstPost)
         {

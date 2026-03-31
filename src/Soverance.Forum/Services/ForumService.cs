@@ -228,10 +228,13 @@ public class ForumService : IForumService
     // === Posts ===
 
     public async Task<(List<PostResponse> Posts, bool HasMore)> GetPostsAsync(
-        int threadId, long? afterId = null, int limit = 25, Guid? currentUserId = null)
+        int threadId, long? afterId = null, int limit = 25, Guid? currentUserId = null, bool isModerator = false)
     {
         var query = _db.Set<ForumPost>()
             .Where(p => p.ThreadId == threadId);
+
+        if (!isModerator)
+            query = query.Where(p => !p.IsDeleted);
 
         if (afterId != null)
             query = query.Where(p => p.Id > afterId.Value);
@@ -345,6 +348,11 @@ public class ForumService : IForumService
         var userVoted = existing == null;
 
         return (voteCount, userVoted);
+    }
+
+    public Task<PurgeResult> PurgePostAsync(long postId, Func<string, Task>? deleteAttachment = null)
+    {
+        throw new NotImplementedException();
     }
 
     // === Helpers ===

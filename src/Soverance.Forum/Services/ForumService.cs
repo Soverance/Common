@@ -99,7 +99,7 @@ public class ForumService : IForumService
     // === Threads ===
 
     public async Task<(List<ThreadSummaryResponse> Threads, bool HasMore)> GetThreadsAsync(
-        string categorySlug, long? afterLastPostAtTicks = null, int? afterId = null, int limit = 25)
+        string categorySlug, long? afterLastPostAtTicks = null, int? afterId = null, int limit = 25, bool isModerator = false)
     {
         var category = await _db.Set<ForumCategory>()
             .FirstOrDefaultAsync(c => c.Slug == categorySlug);
@@ -113,8 +113,8 @@ public class ForumService : IForumService
             .Select(t => new ThreadSummaryResponse(
                 t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked,
                 t.AuthorId,
-                t.Posts.Count - 1,
-                t.Posts.SelectMany(p => p.Votes).Count(),
+                isModerator ? t.Posts.Count - 1 : t.Posts.Count(p => !p.IsDeleted) - 1,
+                isModerator ? t.Posts.SelectMany(p => p.Votes).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Votes).Count(),
                 t.CreatedAt, t.LastPostAt))
             .ToListAsync();
 
@@ -137,8 +137,8 @@ public class ForumService : IForumService
             .Select(t => new ThreadSummaryResponse(
                 t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked,
                 t.AuthorId,
-                t.Posts.Count - 1,
-                t.Posts.SelectMany(p => p.Votes).Count(),
+                isModerator ? t.Posts.Count - 1 : t.Posts.Count(p => !p.IsDeleted) - 1,
+                isModerator ? t.Posts.SelectMany(p => p.Votes).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Votes).Count(),
                 t.CreatedAt, t.LastPostAt))
             .ToListAsync();
 

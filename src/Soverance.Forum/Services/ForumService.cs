@@ -99,7 +99,7 @@ public class ForumService : IForumService
     // === Threads ===
 
     public async Task<(List<ThreadSummaryResponse> Threads, bool HasMore)> GetThreadsAsync(
-        string categorySlug, long? afterLastPostAtTicks = null, int? afterId = null, int limit = 25)
+        string categorySlug, long? afterLastPostAtTicks = null, int? afterId = null, int limit = 25, bool isModerator = false)
     {
         var category = await _db.Set<ForumCategory>()
             .FirstOrDefaultAsync(c => c.Slug == categorySlug);
@@ -113,8 +113,8 @@ public class ForumService : IForumService
             .Select(t => new ThreadSummaryResponse(
                 t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked,
                 t.AuthorId,
-                t.Posts.Count - 1,
-                t.Posts.SelectMany(p => p.Votes).Count(),
+                isModerator ? t.Posts.Count - 1 : t.Posts.Count(p => !p.IsDeleted) - 1,
+                isModerator ? t.Posts.SelectMany(p => p.Votes).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Votes).Count(),
                 t.CreatedAt, t.LastPostAt))
             .ToListAsync();
 
@@ -137,8 +137,8 @@ public class ForumService : IForumService
             .Select(t => new ThreadSummaryResponse(
                 t.Id, t.Title, t.Slug, t.IsPinned, t.IsLocked,
                 t.AuthorId,
-                t.Posts.Count - 1,
-                t.Posts.SelectMany(p => p.Votes).Count(),
+                isModerator ? t.Posts.Count - 1 : t.Posts.Count(p => !p.IsDeleted) - 1,
+                isModerator ? t.Posts.SelectMany(p => p.Votes).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Votes).Count(),
                 t.CreatedAt, t.LastPostAt))
             .ToListAsync();
 
@@ -228,10 +228,13 @@ public class ForumService : IForumService
     // === Posts ===
 
     public async Task<(List<PostResponse> Posts, bool HasMore)> GetPostsAsync(
-        int threadId, long? afterId = null, int limit = 25, Guid? currentUserId = null)
+        int threadId, long? afterId = null, int limit = 25, Guid? currentUserId = null, bool isModerator = false)
     {
         var query = _db.Set<ForumPost>()
             .Where(p => p.ThreadId == threadId);
+
+        if (!isModerator)
+            query = query.Where(p => !p.IsDeleted);
 
         if (afterId != null)
             query = query.Where(p => p.Id > afterId.Value);
@@ -345,6 +348,53 @@ public class ForumService : IForumService
         var userVoted = existing == null;
 
         return (voteCount, userVoted);
+    }
+
+    public async Task<PurgeResult> PurgePostAsync(long postId, Func<string, Task>? deleteAttachment = null)
+    {
+        var post = await _db.Set<ForumPost>()
+            .Include(p => p.Thread)
+                .ThenInclude(t => t.Posts.OrderBy(pp => pp.CreatedAt).ThenBy(pp => pp.Id).Take(1))
+            .Include(p => p.Attachments)
+            .FirstOrDefaultAsync(p => p.Id == postId);
+
+        if (post == null) return PurgeResult.NotFound;
+
+        var firstPostInThread = post.Thread.Posts.First();
+        var isFirstPost = post.Id == firstPostInThread.Id;
+
+        if (isFirstPost)
+        {
+            // Purge entire thread — collect all attachments first
+            var allAttachments = await _db.Set<ForumAttachment>()
+                .Where(a => a.Post != null && a.Post.ThreadId == post.ThreadId)
+                .ToListAsync();
+
+            if (deleteAttachment != null)
+            {
+                foreach (var att in allAttachments)
+                    await deleteAttachment(att.StoragePath);
+            }
+
+            _db.Set<ForumAttachment>().RemoveRange(allAttachments);
+            _db.Set<ForumThread>().Remove(post.Thread);
+            await _db.SaveChangesAsync();
+            return PurgeResult.ThreadPurged;
+        }
+        else
+        {
+            // Purge single post — delete its attachments
+            if (deleteAttachment != null)
+            {
+                foreach (var att in post.Attachments)
+                    await deleteAttachment(att.StoragePath);
+            }
+
+            _db.Set<ForumAttachment>().RemoveRange(post.Attachments);
+            _db.Set<ForumPost>().Remove(post);
+            await _db.SaveChangesAsync();
+            return PurgeResult.PostPurged;
+        }
     }
 
     // === Helpers ===

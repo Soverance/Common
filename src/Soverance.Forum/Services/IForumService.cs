@@ -13,7 +13,7 @@ public interface IForumService
 
     // Threads
     Task<(List<ThreadSummaryResponse> Threads, bool HasMore)> GetThreadsAsync(
-        string categorySlug, long? afterLastPostAtTicks = null, int? afterId = null, int limit = 25);
+        string categorySlug, long? afterLastPostAtTicks = null, int? afterId = null, int limit = 25, bool isModerator = false);
     Task<ThreadDetailResponse?> GetThreadBySlugAsync(string categorySlug, string threadSlug);
     Task<ThreadDetailResponse?> CreateThreadAsync(
         string categorySlug, CreateThreadRequest request, Guid authorId);
@@ -22,11 +22,12 @@ public interface IForumService
 
     // Posts
     Task<(List<PostResponse> Posts, bool HasMore)> GetPostsAsync(
-        int threadId, long? afterId = null, int limit = 25, Guid? currentUserId = null);
+        int threadId, long? afterId = null, int limit = 25, Guid? currentUserId = null, bool isModerator = false);
     Task<PostResponse?> CreatePostAsync(
         int threadId, CreatePostRequest request, Guid authorId);
     Task<PostResponse?> UpdatePostAsync(long postId, UpdatePostRequest request, Guid callerId, bool isModerator);
     Task<bool> DeletePostAsync(long postId, Guid callerId, bool isModerator);
+    Task<PurgeResult> PurgePostAsync(long postId, Func<string, Task>? deleteAttachment = null);
 
     // Voting
     Task<(int VoteCount, bool UserVoted)> ToggleVoteAsync(long postId, Guid userId);

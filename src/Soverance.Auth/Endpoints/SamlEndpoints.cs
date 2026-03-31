@@ -19,6 +19,7 @@ public static class SamlEndpoints
 {
     private const string NameClaim = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name";
     private const string GroupsClaim = "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups";
+    private const string DisplayNameClaim = "http://schemas.microsoft.com/identity/claims/displayname";
 
     public static void MapSamlEndpoints(this IEndpointRouteBuilder app)
     {
@@ -81,6 +82,9 @@ public static class SamlEndpoints
 
                 var username = usernameClaim.Value;
 
+                var displayName = claimsIdentity.Claims
+                    .FirstOrDefault(c => c.Type == DisplayNameClaim)?.Value;
+
                 // Read group GUIDs from assertion
                 var groupIds = claimsIdentity.Claims
                     .Where(c => c.Type == GroupsClaim)
@@ -113,7 +117,7 @@ public static class SamlEndpoints
                     {
                         Id = Guid.NewGuid(),
                         Email = username, // SAML typically provides email as name claim
-                        Username = username,
+                        Username = displayName ?? username,
                         IsEnabled = true,
                         Role = assignedRole,
                         CreatedAt = DateTimeOffset.UtcNow,
@@ -124,14 +128,38 @@ public static class SamlEndpoints
                 }
                 else
                 {
-                    // Sync role on every login
+                    // Sync role and display name on every login
                     user.Role = assignedRole;
+                    if (!string.IsNullOrWhiteSpace(displayName))
+                        user.Username = displayName;
                     user.UpdatedAt = DateTimeOffset.UtcNow;
                     await db.SaveChangesAsync();
                 }
 
                 if (!user.IsEnabled)
                     return Results.Redirect($"{handler.ErrorRedirectBase}?error=disabled");
+
+                // Best-effort avatar sync from Graph API
+                var graphPhoto = httpContext.RequestServices.GetService<IGraphPhotoService>();
+                var avatarStore = httpContext.RequestServices.GetService<IAvatarStore>();
+                if (graphPhoto != null && avatarStore != null)
+                {
+                    try
+                    {
+                        var photo = await graphPhoto.GetUserPhotoAsync(username);
+                        if (photo != null)
+                        {
+                            user.AvatarUrl = await avatarStore.SaveAvatarAsync(user.Id, photo.Value.Data, photo.Value.ContentType);
+                            await db.SaveChangesAsync();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        var logger = httpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("Soverance.Auth.Endpoints.SamlEndpoints");
+                        logger.LogWarning(ex, "Avatar sync failed for {Email}", username);
+                    }
+                }
 
                 return await handler.HandleSignInAsync(httpContext, user);
             }

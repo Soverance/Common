@@ -45,6 +45,7 @@ public class UserProfileResponse
     public Guid Id { get; set; }
     public string Email { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
+    public string? DisplayName { get; set; }
     public bool HasApiKey { get; set; }
     public DateTimeOffset? ApiKeyCreatedAt { get; set; }
     public string Role { get; set; } = string.Empty;

@@ -116,8 +116,9 @@ public static class SamlEndpoints
                     user = new User
                     {
                         Id = Guid.NewGuid(),
-                        Email = username, // SAML typically provides email as name claim
-                        Username = displayName ?? username,
+                        Email = username,
+                        Username = username,
+                        DisplayName = displayName,
                         IsEnabled = true,
                         Role = assignedRole,
                         CreatedAt = DateTimeOffset.UtcNow,
@@ -131,7 +132,7 @@ public static class SamlEndpoints
                     // Sync role and display name on every login
                     user.Role = assignedRole;
                     if (!string.IsNullOrWhiteSpace(displayName))
-                        user.Username = displayName;
+                        user.DisplayName = displayName;
                     user.UpdatedAt = DateTimeOffset.UtcNow;
                     await db.SaveChangesAsync();
                 }

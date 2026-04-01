@@ -140,11 +140,11 @@ public static class SamlEndpoints
                     return Results.Redirect($"{handler.ErrorRedirectBase}?error=disabled");
 
                 // Best-effort avatar sync from Graph API
-                var graphPhoto = httpContext.RequestServices.GetService<IGraphPhotoService>();
-                var avatarStore = httpContext.RequestServices.GetService<IAvatarStore>();
-                if (graphPhoto != null && avatarStore != null)
+                try
                 {
-                    try
+                    var graphPhoto = httpContext.RequestServices.GetService<IGraphPhotoService>();
+                    var avatarStore = httpContext.RequestServices.GetService<IAvatarStore>();
+                    if (graphPhoto != null && avatarStore != null)
                     {
                         var photo = await graphPhoto.GetUserPhotoAsync(username);
                         if (photo != null)
@@ -153,12 +153,12 @@ public static class SamlEndpoints
                             await db.SaveChangesAsync();
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        var logger = httpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-                            .CreateLogger("Soverance.Auth.Endpoints.SamlEndpoints");
-                        logger.LogWarning(ex, "Avatar sync failed for {Email}", username);
-                    }
+                }
+                catch (Exception ex)
+                {
+                    var logger = httpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                        .CreateLogger("Soverance.Auth.Endpoints.SamlEndpoints");
+                    logger.LogWarning(ex, "Avatar sync failed for {Email}", username);
                 }
 
                 return await handler.HandleSignInAsync(httpContext, user);

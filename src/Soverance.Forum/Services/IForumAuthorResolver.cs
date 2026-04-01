@@ -6,5 +6,5 @@ public interface IForumAuthorResolver
 }
 
 public record ForumAuthorInfo(
-    Guid UserId, string Username, string? AvatarHash,
-    int PostCount, DateTimeOffset JoinedAt);
+    Guid UserId, string Username, string? DisplayName,
+    string? AvatarHash, int PostCount, DateTimeOffset JoinedAt);

@@ -18,6 +18,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.Email).HasMaxLength(256).IsRequired();
         builder.Property(u => u.Username).HasMaxLength(64).IsRequired();
+        builder.Property(u => u.DisplayName).HasMaxLength(128);
         builder.Property(u => u.PasswordHash).HasMaxLength(256);
         builder.Property(u => u.ApiKey).HasMaxLength(128);
         builder.Property(u => u.ApiKeyCreatedAt);

@@ -4,7 +4,7 @@ namespace Soverance.Forum.DTOs;
 public record CreateCategoryRequest(string Name, string Description, int DisplayOrder = 0);
 public record UpdateCategoryRequest(string Name, string Description, int DisplayOrder);
 public record CreateThreadRequest(string Title, string Body);
-public record CreatePostRequest(string Body);
+public record CreatePostRequest(string Body, long? ReplyToPostId = null);
 public record UpdatePostRequest(string Body);
 
 // Response DTOs
@@ -22,9 +22,12 @@ public record ThreadDetailResponse(
     bool IsPinned, bool IsLocked, bool IsDeleted, Guid AuthorId,
     DateTimeOffset CreatedAt, DateTimeOffset LastPostAt);
 
+public record ReactionSummary(int Like, int Thanks, int Funny);
+
 public record PostResponse(
     long Id, Guid AuthorId, string? Body, bool IsEdited, bool IsDeleted,
-    int VoteCount, bool CurrentUserVoted,
+    ReactionSummary Reactions, string[] UserReactions,
+    long? ReplyToPostId,
     DateTimeOffset CreatedAt, DateTimeOffset? UpdatedAt);
 
 public enum PurgeResult { NotFound, PostPurged, ThreadPurged }

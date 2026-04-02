@@ -32,6 +32,6 @@ public interface IForumService
     Task<bool> DeletePostAsync(long postId, Guid callerId, bool isModerator);
     Task<PurgeResult> PurgePostAsync(long postId, Func<string, Task>? deleteAttachment = null);
 
-    // Voting
-    Task<(int VoteCount, bool UserVoted)> ToggleVoteAsync(long postId, Guid userId);
+    // Reactions
+    Task<(ReactionSummary Reactions, string[] UserReactions)> ToggleReactionAsync(long postId, Guid userId, string reactionType);
 }

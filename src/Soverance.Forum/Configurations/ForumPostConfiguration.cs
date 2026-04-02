@@ -14,6 +14,17 @@ public class ForumPostConfiguration : IEntityTypeConfiguration<ForumPost>
         builder.Property(p => p.IsEdited).HasDefaultValue(false);
         builder.Property(p => p.IsDeleted).HasDefaultValue(false);
         builder.HasIndex(p => new { p.ThreadId, p.CreatedAt });
-        builder.HasMany(p => p.Votes).WithOne(v => v.Post).HasForeignKey(v => v.PostId).OnDelete(DeleteBehavior.Cascade);
+
+        // Self-referential FK for quote/reply
+        builder.HasOne(p => p.ReplyToPost)
+            .WithMany()
+            .HasForeignKey(p => p.ReplyToPostId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Reactions (replaces Votes)
+        builder.HasMany(p => p.Reactions)
+            .WithOne(r => r.Post)
+            .HasForeignKey(r => r.PostId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

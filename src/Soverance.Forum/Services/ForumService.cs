@@ -121,7 +121,7 @@ public class ForumService : IForumService
                 isModerator
                     ? t.Posts.Count - 1
                     : (t.Posts.Count(p => !p.IsDeleted) > 1 ? t.Posts.Count(p => !p.IsDeleted) - 1 : 0),
-                isModerator ? t.Posts.SelectMany(p => p.Votes).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Votes).Count(),
+                isModerator ? t.Posts.SelectMany(p => p.Reactions).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Reactions).Count(),
                 t.CreatedAt, t.LastPostAt))
             .ToListAsync();
 
@@ -150,7 +150,7 @@ public class ForumService : IForumService
                 isModerator
                     ? t.Posts.Count - 1
                     : (t.Posts.Count(p => !p.IsDeleted) > 1 ? t.Posts.Count(p => !p.IsDeleted) - 1 : 0),
-                isModerator ? t.Posts.SelectMany(p => p.Votes).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Votes).Count(),
+                isModerator ? t.Posts.SelectMany(p => p.Reactions).Count() : t.Posts.Where(p => !p.IsDeleted).SelectMany(p => p.Reactions).Count(),
                 t.CreatedAt, t.LastPostAt))
             .ToListAsync();
 
@@ -308,22 +308,36 @@ public class ForumService : IForumService
             .OrderBy(p => p.CreatedAt)
             .ThenBy(p => p.Id)
             .Take(limit + 1)
-            .Select(p => new PostResponse(
+            .Select(p => new
+            {
                 p.Id,
                 p.AuthorId,
-                p.IsDeleted ? null : p.Body,
+                Body = p.IsDeleted ? null : p.Body,
                 p.IsEdited,
                 p.IsDeleted,
-                p.Votes.Count,
-                currentUserId != null && p.Votes.Any(v => v.UserId == currentUserId.Value),
+                p.ReplyToPostId,
                 p.CreatedAt,
-                p.UpdatedAt))
+                p.UpdatedAt,
+                Reactions = p.Reactions.ToList(),
+            })
             .ToListAsync();
 
         var hasMore = posts.Count > limit;
         if (hasMore) posts = posts.Take(limit).ToList();
 
-        return (posts, hasMore);
+        var result = posts.Select(p => new PostResponse(
+            p.Id,
+            p.AuthorId,
+            p.Body,
+            p.IsEdited,
+            p.IsDeleted,
+            BuildReactionSummary(p.Reactions),
+            BuildUserReactions(p.Reactions, currentUserId),
+            p.ReplyToPostId,
+            p.CreatedAt,
+            p.UpdatedAt)).ToList();
+
+        return (result, hasMore);
     }
 
     public async Task<PostResponse?> CreatePostAsync(
@@ -332,12 +346,22 @@ public class ForumService : IForumService
         var thread = await _db.Set<ForumThread>().FindAsync(threadId);
         if (thread == null || thread.IsLocked) return null;
 
+        // Validate ReplyToPostId if provided
+        if (request.ReplyToPostId.HasValue)
+        {
+            var replyTarget = await _db.Set<ForumPost>()
+                .Where(p => p.Id == request.ReplyToPostId.Value && p.ThreadId == threadId)
+                .AnyAsync();
+            if (!replyTarget) return null;
+        }
+
         var now = DateTimeOffset.UtcNow;
         var post = new ForumPost
         {
             ThreadId = threadId,
             AuthorId = authorId,
             Body = request.Body,
+            ReplyToPostId = request.ReplyToPostId,
             CreatedAt = now
         };
 
@@ -346,7 +370,9 @@ public class ForumService : IForumService
         await _db.SaveChangesAsync();
 
         return new PostResponse(
-            post.Id, post.AuthorId, post.Body, false, false, 0, false,
+            post.Id, post.AuthorId, post.Body, false, false,
+            new ReactionSummary(0, 0, 0), [],
+            post.ReplyToPostId,
             post.CreatedAt, null);
     }
 
@@ -354,7 +380,7 @@ public class ForumService : IForumService
         long postId, UpdatePostRequest request, Guid callerId, bool isModerator)
     {
         var post = await _db.Set<ForumPost>()
-            .Include(p => p.Votes)
+            .Include(p => p.Reactions)
             .FirstOrDefaultAsync(p => p.Id == postId);
 
         if (post == null || post.IsDeleted) return null;
@@ -368,8 +394,9 @@ public class ForumService : IForumService
 
         return new PostResponse(
             post.Id, post.AuthorId, post.Body, post.IsEdited, post.IsDeleted,
-            post.Votes.Count,
-            post.Votes.Any(v => v.UserId == callerId),
+            BuildReactionSummary(post.Reactions),
+            BuildUserReactions(post.Reactions, callerId),
+            post.ReplyToPostId,
             post.CreatedAt, post.UpdatedAt);
     }
 
@@ -386,33 +413,45 @@ public class ForumService : IForumService
         return true;
     }
 
-    // === Voting ===
+    // === Reactions ===
 
-    public async Task<(int VoteCount, bool UserVoted)> ToggleVoteAsync(long postId, Guid userId)
+    private static readonly Dictionary<string, ReactionType> ReactionTypeMap = new(StringComparer.OrdinalIgnoreCase)
     {
-        var existing = await _db.Set<ForumVote>()
-            .FirstOrDefaultAsync(v => v.PostId == postId && v.UserId == userId);
+        ["like"] = ReactionType.Like,
+        ["thanks"] = ReactionType.Thanks,
+        ["funny"] = ReactionType.Funny,
+    };
+
+    public async Task<(ReactionSummary Reactions, string[] UserReactions)> ToggleReactionAsync(long postId, Guid userId, string reactionType)
+    {
+        if (!ReactionTypeMap.TryGetValue(reactionType, out var type))
+            throw new ArgumentException($"Invalid reaction type: {reactionType}");
+
+        var existing = await _db.Set<ForumReaction>()
+            .FirstOrDefaultAsync(r => r.PostId == postId && r.UserId == userId && r.ReactionType == type);
 
         if (existing != null)
         {
-            _db.Set<ForumVote>().Remove(existing);
+            _db.Set<ForumReaction>().Remove(existing);
         }
         else
         {
-            _db.Set<ForumVote>().Add(new ForumVote
+            _db.Set<ForumReaction>().Add(new ForumReaction
             {
                 PostId = postId,
                 UserId = userId,
+                ReactionType = type,
                 CreatedAt = DateTimeOffset.UtcNow
             });
         }
 
         await _db.SaveChangesAsync();
 
-        var voteCount = await _db.Set<ForumVote>().CountAsync(v => v.PostId == postId);
-        var userVoted = existing == null;
+        var allReactions = await _db.Set<ForumReaction>()
+            .Where(r => r.PostId == postId)
+            .ToListAsync();
 
-        return (voteCount, userVoted);
+        return (BuildReactionSummary(allReactions), BuildUserReactions(allReactions, userId));
     }
 
     public async Task<PurgeResult> PurgePostAsync(long postId, Func<string, Task>? deleteAttachment = null)
@@ -467,6 +506,25 @@ public class ForumService : IForumService
     }
 
     // === Helpers ===
+
+    private static ReactionSummary BuildReactionSummary(IEnumerable<ForumReaction> reactions)
+    {
+        var grouped = reactions.GroupBy(r => r.ReactionType)
+            .ToDictionary(g => g.Key, g => g.Count());
+        return new ReactionSummary(
+            grouped.GetValueOrDefault(ReactionType.Like),
+            grouped.GetValueOrDefault(ReactionType.Thanks),
+            grouped.GetValueOrDefault(ReactionType.Funny));
+    }
+
+    private static string[] BuildUserReactions(IEnumerable<ForumReaction> reactions, Guid? userId)
+    {
+        if (userId == null) return [];
+        return reactions
+            .Where(r => r.UserId == userId.Value)
+            .Select(r => r.ReactionType.ToString().ToLowerInvariant())
+            .ToArray();
+    }
 
     private async Task<string> GenerateUniqueCategorySlugAsync(string name)
     {

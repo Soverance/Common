@@ -9,9 +9,11 @@ public class ForumPost
     public bool IsEdited { get; set; }
     public bool IsDeleted { get; set; }
     public Guid? DeletedBy { get; set; }
+    public long? ReplyToPostId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
     public ForumThread Thread { get; set; } = null!;
-    public List<ForumVote> Votes { get; set; } = [];
+    public ForumPost? ReplyToPost { get; set; }
+    public List<ForumReaction> Reactions { get; set; } = [];
     public List<ForumAttachment> Attachments { get; set; } = [];
 }

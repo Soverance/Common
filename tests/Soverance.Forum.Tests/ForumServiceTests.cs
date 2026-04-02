@@ -342,10 +342,10 @@ public class ForumServiceTests : IDisposable
         Assert.False(result);
     }
 
-    // === Voting Tests ===
+    // === Reaction Tests ===
 
     [Fact]
-    public async Task ToggleVote_AddsVote()
+    public async Task ToggleReaction_AddsReaction()
     {
         var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
         var thread = await _service.CreateThreadAsync(
@@ -354,14 +354,16 @@ public class ForumServiceTests : IDisposable
         var (posts, _) = await _service.GetPostsAsync(thread!.Id);
         var userId = Guid.NewGuid();
 
-        var (count, voted) = await _service.ToggleVoteAsync(posts[0].Id, userId);
+        var (reactions, userReactions) = await _service.ToggleReactionAsync(posts[0].Id, userId, "like");
 
-        Assert.Equal(1, count);
-        Assert.True(voted);
+        Assert.Equal(1, reactions.Like);
+        Assert.Equal(0, reactions.Thanks);
+        Assert.Equal(0, reactions.Funny);
+        Assert.Contains("like", userReactions);
     }
 
     [Fact]
-    public async Task ToggleVote_RemovesExistingVote()
+    public async Task ToggleReaction_RemovesExistingReaction()
     {
         var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
         var thread = await _service.CreateThreadAsync(
@@ -370,15 +372,35 @@ public class ForumServiceTests : IDisposable
         var (posts, _) = await _service.GetPostsAsync(thread!.Id);
         var userId = Guid.NewGuid();
 
-        await _service.ToggleVoteAsync(posts[0].Id, userId);
-        var (count, voted) = await _service.ToggleVoteAsync(posts[0].Id, userId);
+        await _service.ToggleReactionAsync(posts[0].Id, userId, "like");
+        var (reactions, userReactions) = await _service.ToggleReactionAsync(posts[0].Id, userId, "like");
 
-        Assert.Equal(0, count);
-        Assert.False(voted);
+        Assert.Equal(0, reactions.Like);
+        Assert.DoesNotContain("like", userReactions);
     }
 
     [Fact]
-    public async Task ToggleVote_MultipleUsers_CountsCorrectly()
+    public async Task ToggleReaction_MultipleTypes_TrackedSeparately()
+    {
+        var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
+        var thread = await _service.CreateThreadAsync(
+            category.Slug, new CreateThreadRequest("T", "B"), Guid.NewGuid());
+
+        var (posts, _) = await _service.GetPostsAsync(thread!.Id);
+        var userId = Guid.NewGuid();
+
+        await _service.ToggleReactionAsync(posts[0].Id, userId, "like");
+        var (reactions, userReactions) = await _service.ToggleReactionAsync(posts[0].Id, userId, "thanks");
+
+        Assert.Equal(1, reactions.Like);
+        Assert.Equal(1, reactions.Thanks);
+        Assert.Equal(0, reactions.Funny);
+        Assert.Contains("like", userReactions);
+        Assert.Contains("thanks", userReactions);
+    }
+
+    [Fact]
+    public async Task ToggleReaction_MultipleUsers_CountsCorrectly()
     {
         var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
         var thread = await _service.CreateThreadAsync(
@@ -387,15 +409,29 @@ public class ForumServiceTests : IDisposable
         var (posts, _) = await _service.GetPostsAsync(thread!.Id);
         var postId = posts[0].Id;
 
-        await _service.ToggleVoteAsync(postId, Guid.NewGuid());
-        await _service.ToggleVoteAsync(postId, Guid.NewGuid());
-        var (count, _) = await _service.ToggleVoteAsync(postId, Guid.NewGuid());
+        await _service.ToggleReactionAsync(postId, Guid.NewGuid(), "like");
+        await _service.ToggleReactionAsync(postId, Guid.NewGuid(), "like");
+        var (reactions, _) = await _service.ToggleReactionAsync(postId, Guid.NewGuid(), "thanks");
 
-        Assert.Equal(3, count);
+        Assert.Equal(2, reactions.Like);
+        Assert.Equal(1, reactions.Thanks);
     }
 
     [Fact]
-    public async Task GetPosts_IncludesCurrentUserVoted()
+    public async Task ToggleReaction_InvalidType_Throws()
+    {
+        var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
+        var thread = await _service.CreateThreadAsync(
+            category.Slug, new CreateThreadRequest("T", "B"), Guid.NewGuid());
+
+        var (posts, _) = await _service.GetPostsAsync(thread!.Id);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            _service.ToggleReactionAsync(posts[0].Id, Guid.NewGuid(), "invalid"));
+    }
+
+    [Fact]
+    public async Task GetPosts_IncludesUserReactions()
     {
         var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
         var thread = await _service.CreateThreadAsync(
@@ -403,13 +439,68 @@ public class ForumServiceTests : IDisposable
 
         var (posts, _) = await _service.GetPostsAsync(thread!.Id);
         var userId = Guid.NewGuid();
-        await _service.ToggleVoteAsync(posts[0].Id, userId);
+        await _service.ToggleReactionAsync(posts[0].Id, userId, "like");
+        await _service.ToggleReactionAsync(posts[0].Id, userId, "funny");
 
-        var (postsWithVote, _) = await _service.GetPostsAsync(thread.Id, currentUserId: userId);
-        Assert.True(postsWithVote[0].CurrentUserVoted);
+        var (postsWithReactions, _) = await _service.GetPostsAsync(thread.Id, currentUserId: userId);
+        Assert.Equal(1, postsWithReactions[0].Reactions.Like);
+        Assert.Equal(1, postsWithReactions[0].Reactions.Funny);
+        Assert.Contains("like", postsWithReactions[0].UserReactions);
+        Assert.Contains("funny", postsWithReactions[0].UserReactions);
 
-        var (postsWithoutVote, _) = await _service.GetPostsAsync(thread.Id, currentUserId: Guid.NewGuid());
-        Assert.False(postsWithoutVote[0].CurrentUserVoted);
+        var (postsOtherUser, _) = await _service.GetPostsAsync(thread.Id, currentUserId: Guid.NewGuid());
+        Assert.Empty(postsOtherUser[0].UserReactions);
+    }
+
+    // === Reply Tests ===
+
+    [Fact]
+    public async Task CreatePost_WithReplyToPostId_SetsReference()
+    {
+        var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
+        var authorId = Guid.NewGuid();
+        var thread = await _service.CreateThreadAsync(
+            category.Slug, new CreateThreadRequest("T", "First"), authorId);
+
+        var (posts, _) = await _service.GetPostsAsync(thread!.Id);
+        var firstPostId = posts[0].Id;
+
+        var reply = await _service.CreatePostAsync(
+            thread.Id, new CreatePostRequest("Replying to you", firstPostId), Guid.NewGuid());
+
+        Assert.NotNull(reply);
+        Assert.Equal(firstPostId, reply!.ReplyToPostId);
+    }
+
+    [Fact]
+    public async Task CreatePost_WithReplyToPostId_WrongThread_ReturnsNull()
+    {
+        var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
+        var authorId = Guid.NewGuid();
+        var thread1 = await _service.CreateThreadAsync(
+            category.Slug, new CreateThreadRequest("T1", "First"), authorId);
+        var thread2 = await _service.CreateThreadAsync(
+            category.Slug, new CreateThreadRequest("T2", "Second"), authorId);
+
+        var (posts1, _) = await _service.GetPostsAsync(thread1!.Id);
+
+        var result = await _service.CreatePostAsync(
+            thread2!.Id, new CreatePostRequest("Cross-thread reply", posts1[0].Id), authorId);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task CreatePost_WithReplyToPostId_NonexistentPost_ReturnsNull()
+    {
+        var category = await _service.CreateCategoryAsync(new CreateCategoryRequest("General", ""));
+        var thread = await _service.CreateThreadAsync(
+            category.Slug, new CreateThreadRequest("T", "B"), Guid.NewGuid());
+
+        var result = await _service.CreatePostAsync(
+            thread!.Id, new CreatePostRequest("Reply to nothing", 99999), Guid.NewGuid());
+
+        Assert.Null(result);
     }
 
     // === Pagination Tests ===

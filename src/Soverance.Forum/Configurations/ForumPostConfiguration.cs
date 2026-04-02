@@ -19,7 +19,7 @@ public class ForumPostConfiguration : IEntityTypeConfiguration<ForumPost>
         builder.HasOne(p => p.ReplyToPost)
             .WithMany()
             .HasForeignKey(p => p.ReplyToPostId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.NoAction);
 
         // Reactions (replaces Votes)
         builder.HasMany(p => p.Reactions)

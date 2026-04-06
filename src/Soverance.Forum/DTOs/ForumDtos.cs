@@ -19,7 +19,7 @@ public record ThreadSummaryResponse(
 
 public record ThreadDetailResponse(
     int Id, string Title, string Slug, int CategoryId, string CategoryName, string CategorySlug,
-    bool IsPinned, bool IsLocked, bool IsDeleted, Guid AuthorId,
+    bool IsPinned, bool IsLocked, bool IsDeleted, bool CategoryIsSystem, Guid AuthorId,
     DateTimeOffset CreatedAt, DateTimeOffset LastPostAt);
 
 public record ReactionSummary(int Like, int Thanks, int Funny);

@@ -175,7 +175,7 @@ public class ForumService : IForumService
         return await query
             .Select(t => new ThreadDetailResponse(
                 t.Id, t.Title, t.Slug, t.CategoryId, t.Category.Name, t.Category.Slug,
-                t.IsPinned, t.IsLocked, t.IsDeleted, t.AuthorId,
+                t.IsPinned, t.IsLocked, t.IsDeleted, t.Category.IsSystem, t.AuthorId,
                 t.CreatedAt, t.LastPostAt))
             .FirstOrDefaultAsync();
     }
@@ -218,7 +218,7 @@ public class ForumService : IForumService
 
         return new ThreadDetailResponse(
             thread.Id, thread.Title, thread.Slug, category.Id, category.Name, category.Slug,
-            thread.IsPinned, thread.IsLocked, false, thread.AuthorId,
+            thread.IsPinned, thread.IsLocked, false, category.IsSystem, thread.AuthorId,
             thread.CreatedAt, thread.LastPostAt);
     }
 

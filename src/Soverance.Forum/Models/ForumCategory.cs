@@ -8,6 +8,7 @@ public class ForumCategory
     public string Description { get; set; } = string.Empty;
     public int DisplayOrder { get; set; }
     public bool IsSystem { get; set; }
+    public bool RequiresAdminForNewThreads { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public List<ForumThread> Threads { get; set; } = [];
 }

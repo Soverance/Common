@@ -15,6 +15,7 @@ public class ForumCategoryConfiguration : IEntityTypeConfiguration<ForumCategory
         builder.Property(c => c.Description).HasMaxLength(500);
         builder.Property(c => c.DisplayOrder).HasDefaultValue(0);
         builder.Property(c => c.IsSystem).HasDefaultValue(false);
+        builder.Property(c => c.RequiresAdminForNewThreads).HasDefaultValue(false);
         builder.HasMany(c => c.Threads).WithOne(t => t.Category).HasForeignKey(t => t.CategoryId).OnDelete(DeleteBehavior.Cascade);
     }
 }

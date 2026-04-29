@@ -17,7 +17,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.5" />
-    <PackageReference Include="Soverance.Auth" Version="1.0.0" />
+    <PackageReference Include="Soverance.Auth" Version="1.0.6" />
   </ItemGroup>
 
 </Project>

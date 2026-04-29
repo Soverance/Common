@@ -3,4 +3,5 @@
   <Project Path="src/Soverance.Data/Soverance.Data.csproj" />
   <Project Path="src/Soverance.Forum/Soverance.Forum.csproj" />
   <Project Path="tests/Soverance.Forum.Tests/Soverance.Forum.Tests.csproj" />
+  <Project Path="tests/Soverance.Auth.Tests/Soverance.Auth.Tests.csproj" />
 </Solution>

@@ -16,6 +16,7 @@ Authentication and authorization library supporting multiple strategies:
 - **Cookie** — Browser-based session auth for SPAs
 - **API Key** — BCrypt-hashed key validation via `X-Api-Key` header
 - **SAML SSO** — Full SAML 2.0 integration with IdP configuration, assertion handling, group-to-role mapping, and SP metadata generation
+- **OAuth 2.0** — Google and Microsoft sign-in via SPA-driven code-exchange flow. Auto-links by verified email; rejects logins where an email is already linked to a different OAuth identity.
 
 Includes a shared `User` model with role-based authorization (Member, Moderator, Admin), refresh token management, and an admin seeder for initial setup.
 
@@ -75,6 +76,9 @@ builder.Services.AddAuthentication().AddSoveranceApiKeyAuth();       // API Key
 
 // Forum
 builder.Services.AddForumServices();
+
+// OAuth (Google + Microsoft)
+builder.Services.AddSoveranceOAuth(builder.Configuration);
 ```
 
 ### DbContext Inheritance
@@ -99,7 +103,23 @@ public class MyDbContext : SoveranceDbContextBase
 app.MapSamlEndpoints();          // Public SAML login flow
 app.MapSamlAdminEndpoints();     // Admin SAML configuration (requires Admin role)
 app.MapSamlExchangeEndpoint();   // JWT code exchange for SPA SAML flows
+app.MapOAuthEndpoints();         // Google + Microsoft OAuth login
 ```
+
+### OAuth Configuration
+
+```json
+{
+  "OAuth": {
+    "Google":    { "ClientId": "...", "ClientSecret": "..." },
+    "Microsoft": { "ClientId": "...", "ClientSecret": "..." }
+  }
+}
+```
+
+The `app.MapOAuthEndpoints()` call registers `POST /api/auth/oauth/{provider}` where `{provider}` is `google` or `microsoft`. The SPA POSTs `{ code, redirectUri }` after handling the IdP redirect itself.
+
+**Account-linking behavior:** if the OAuth `(provider, providerId)` matches an existing user, that user is returned. If the email matches an existing user with no OAuth identity, the OAuth identity is linked. If the email matches an existing user already linked to a *different* OAuth identity (different provider, or same provider with a different ID), the request returns **409 Conflict**.
 
 ## Configuration
 

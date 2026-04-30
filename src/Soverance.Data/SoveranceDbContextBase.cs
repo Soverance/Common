@@ -35,12 +35,10 @@ public abstract class SoveranceDbContextBase : DbContext, IDataProtectionKeyCont
         if (provider.Contains("SqlServer", StringComparison.Ordinal))
         {
             modelBuilder.Entity<User>()
-                .HasIndex(new[] { nameof(User.ApiKey) }, "IX_Users_ApiKey")
+                .HasIndex(u => u.ApiKey)
                 .HasFilter("[ApiKey] IS NOT NULL");
             modelBuilder.Entity<User>()
-                .HasIndex(
-                    new[] { nameof(User.OAuthProvider), nameof(User.OAuthId) },
-                    "IX_Users_OAuthProvider_OAuthId")
+                .HasIndex(u => new { u.OAuthProvider, u.OAuthId })
                 .HasFilter("[OAuthProvider] IS NOT NULL AND [OAuthId] IS NOT NULL");
         }
 

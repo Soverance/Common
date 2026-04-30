@@ -4,7 +4,7 @@ Shared .NET libraries providing authentication, data access, and forum functiona
 
 ## Overview
 
-This repository contains reusable library projects consumed by [soverance.com](https://github.com/Soverance/soverance.com) and [Vanalytics](https://github.com/Soverance/Vanalytics) via git submodule. It provides a unified user model, multiple authentication strategies, a base Entity Framework Core DbContext, and a full-featured forum system.
+This repository contains reusable library projects published as NuGet packages and one npm package, consumed by [soverance.com](https://github.com/Soverance/soverance.com), [Vanalytics](https://github.com/Soverance/Vanalytics), and [Foundation](https://github.com/Soverance/Foundation). It provides a unified user model, multiple authentication strategies, a base Entity Framework Core DbContext, a full-featured forum system, and a shared React component + theming library.
 
 ## Projects
 
@@ -22,11 +22,16 @@ Includes a shared `User` model with role-based authorization (Member, Moderator,
 
 ### Soverance.Data
 
-Entity Framework Core foundation providing:
+Provider-agnostic EF Core foundation providing:
 
-- **`SoveranceDbContextBase`** — Abstract base DbContext with shared entity configurations for Users, RefreshTokens, and SAML settings
+- **`SoveranceDbContextBase`** — Abstract base DbContext with shared entity configurations for Users, RefreshTokens, and SAML settings. Provider-aware filtered indexes (T-SQL filters applied automatically when running against SQL Server).
 - **Entity configurations** — Index definitions, field constraints, and value conversions for all shared models
-- **SQL Server setup** — Extension method for configuring EF Core with connection retry policies
+- **`AddSoveranceDataProtection<TContext>`** — Persists ASP.NET Core Data Protection keys to the database
+
+Provider registration extensions live in companion packages — pick exactly one for your application:
+
+- **`Soverance.Data.SqlServer`** — `AddSoveranceSqlServer<TContext>` (uses `Microsoft.EntityFrameworkCore.SqlServer`)
+- **`Soverance.Data.Postgres`** — `AddSoverancePostgres<TContext>` (uses `Npgsql.EntityFrameworkCore.PostgreSQL`)
 
 Consuming applications inherit from `SoveranceDbContextBase` and add their own DbSets and configurations.
 
@@ -43,31 +48,81 @@ Forum and discussion system with:
 
 ### Soverance.Web
 
-Reusable React TypeScript components, currently providing a SAML admin configuration panel.
+Reusable React TypeScript components and theming for Soverance applications:
 
-## Integration
+- **`<SamlTab>`** — SAML admin configuration panel
+- **`<ThemeProvider>` / `<ThemeSwitcher>` / `useTheme()`** — Light, dark, and glass themes with localStorage persistence and runtime switching
+- **`themes.css`** — CSS custom-property token blocks for the three themes plus a primary-tinted ambient body gradient
+- **`<GlassBackground />`** — Animated R3F particle background for the glass theme, parameterized by branding primary color (lazy-loaded via `@soverance/web/glass` to keep three.js out of light/dark builds)
 
-### As a Git Submodule
+## Consuming These Packages
 
-```bash
-git submodule add https://github.com/Soverance/Common.git lib/Common
-```
+All four .NET libraries and the `@soverance/web` npm package ship as published packages — **not** as git submodules or `<ProjectReference>` links.
 
-**Important:** When updating the Common submodule, check if any shared models (`User`, `SamlConfig`, `RefreshToken`, etc.) have changed. If so, you must generate an EF migration in **every consuming project** (soverance.com and Vanalytics) to keep their databases in sync. Missing migrations will cause runtime SQL errors.
+### .NET (NuGet)
 
-Then add project references in your `.csproj`:
+Add the package(s) you need to your `.csproj`:
 
 ```xml
-<ProjectReference Include="../lib/Common/src/Soverance.Auth/Soverance.Auth.csproj" />
-<ProjectReference Include="../lib/Common/src/Soverance.Data/Soverance.Data.csproj" />
-<ProjectReference Include="../lib/Common/src/Soverance.Forum/Soverance.Forum.csproj" />
+<ItemGroup>
+  <PackageReference Include="Soverance.Auth" Version="1.1.0" />
+  <PackageReference Include="Soverance.Data" Version="1.1.0" />
+  <!-- Pick exactly one provider companion: -->
+  <PackageReference Include="Soverance.Data.SqlServer" Version="1.0.0" />
+  <!-- OR -->
+  <PackageReference Include="Soverance.Data.Postgres" Version="1.0.0" />
+
+  <!-- Optional: forum -->
+  <PackageReference Include="Soverance.Forum" Version="1.0.8" />
+</ItemGroup>
+```
+
+`Soverance.Data` 1.1.0 no longer ships the `AddSoveranceSqlServer` extension directly — that extension now lives in `Soverance.Data.SqlServer`. Apps upgrading from `Soverance.Data 1.0.x` to `1.1.0` must add a reference to either `Soverance.Data.SqlServer` or `Soverance.Data.Postgres`. Existing apps using SQL Server: pick `Soverance.Data.SqlServer`. New PostgreSQL apps: pick `Soverance.Data.Postgres`.
+
+### npm
+
+```jsonc
+"dependencies": {
+  "@soverance/web": "1.1.0"
+}
+```
+
+If you intend to use the new `<GlassBackground />` (animated R3F particle background for the glass theme), also install the optional peers:
+
+```jsonc
+"dependencies": {
+  "three": "^0.183.0",
+  "@react-three/fiber": "^9.5.0"
+}
+```
+
+Otherwise these are not required — the default `@soverance/web` import surface (`SamlTab`, `ThemeProvider`, `ThemeSwitcher`, `useTheme`) does not pull in three.js.
+
+Use `<GlassBackground />` via lazy import to keep the three.js bundle out of light/dark theme builds:
+
+```tsx
+import { lazy, Suspense } from 'react'
+import { useTheme } from '@soverance/web'
+
+const GlassBackground = lazy(() =>
+  import('@soverance/web/glass').then(m => ({ default: m.GlassBackground })),
+)
+
+function GlassMount() {
+  const { theme } = useTheme()
+  if (theme !== 'glass') return null
+  return <Suspense fallback={null}><GlassBackground /></Suspense>
+}
 ```
 
 ### Service Registration
 
 ```csharp
-// Data access
+// Data access — pick the companion that matches your provider
+using Soverance.Data.SqlServer.Extensions;   // or Soverance.Data.Postgres.Extensions
 builder.Services.AddSoveranceSqlServer<MyDbContext>(builder.Configuration, "DefaultConnection");
+// or
+builder.Services.AddSoverancePostgres<MyDbContext>(builder.Configuration, "DefaultConnection");
 
 // Authentication (choose one or combine)
 builder.Services.AddSoveranceCookieAuth(builder.Environment);        // Cookie-based
@@ -79,6 +134,10 @@ builder.Services.AddForumServices();
 
 // OAuth (Google + Microsoft)
 builder.Services.AddSoveranceOAuth(builder.Configuration);
+
+// Data Protection — provider-agnostic; call after the provider registration above
+using Soverance.Data.Extensions;
+builder.Services.AddSoveranceDataProtection<MyDbContext>("MyApp");
 ```
 
 ### DbContext Inheritance
@@ -86,11 +145,13 @@ builder.Services.AddSoveranceOAuth(builder.Configuration);
 ```csharp
 public class MyDbContext : SoveranceDbContextBase
 {
+    public MyDbContext(DbContextOptions<MyDbContext> options) : base(options) { }
+
     public DbSet<MyEntity> MyEntities { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);  // Applies shared configurations
+        base.OnModelCreating(modelBuilder);  // Applies shared configurations + provider-aware filters
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MyDbContext).Assembly);
         modelBuilder.ApplyForumConfigurations();  // If using the forum
     }
@@ -106,6 +167,16 @@ app.MapSamlExchangeEndpoint();   // JWT code exchange for SPA SAML flows
 app.MapOAuthEndpoints();         // Google + Microsoft OAuth login
 ```
 
+### Migrations
+
+When you bump `Soverance.Data` (e.g., to pick up a new shared entity property), each consuming app must regenerate its own migration:
+
+```sh
+dotnet ef migrations add Probe --project src/MyApp.Data --startup-project src/MyApp
+```
+
+If `Probe` is empty (no schema changes), delete it (`dotnet ef migrations remove`) and you're done. If it contains operations, those reflect schema changes the bumped Common package introduced — review and apply them.
+
 ### OAuth Configuration
 
 ```json
@@ -118,8 +189,6 @@ app.MapOAuthEndpoints();         // Google + Microsoft OAuth login
 ```
 
 The `app.MapOAuthEndpoints()` call registers `POST /api/auth/oauth/{provider}` where `{provider}` is `google` or `microsoft`. The SPA POSTs `{ code, redirectUri }` after handling the IdP redirect itself.
-
-**Account-linking behavior:** if the OAuth `(provider, providerId)` matches an existing user, that user is returned. If the email matches an existing user with no OAuth identity, the OAuth identity is linked. If the email matches an existing user already linked to a *different* OAuth identity (different provider, or same provider with a different ID), the request returns **409 Conflict**.
 
 ## Configuration
 
@@ -151,7 +220,7 @@ The `AdminSeeder` creates or syncs a system admin account on startup. Provide cr
 ## Requirements
 
 - .NET 10.0
-- SQL Server (local or Azure SQL)
+- A relational database provider — SQL Server (via `Soverance.Data.SqlServer`) or PostgreSQL (via `Soverance.Data.Postgres`)
 
 ## License
 

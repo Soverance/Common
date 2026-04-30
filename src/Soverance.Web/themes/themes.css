@@ -1,0 +1,67 @@
+/* Soverance shared theme tokens.
+ * Consumers import once: `import "@soverance/web/themes/themes.css"`.
+ * Tokens are CSS custom properties on :root[data-theme="..."] and are mapped
+ * into Tailwind v4's color namespace via the consumer's @theme directive. */
+
+:root[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --muted: #f5f5f5;
+  --muted-foreground: #525252;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --accent: #e4e4e7;
+  --accent-foreground: #0a0a0a;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --ring: #6366f1;
+  --backdrop-blur: 0px;
+}
+
+:root[data-theme="dark"] {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --muted: #171717;
+  --muted-foreground: #a3a3a3;
+  --border: #262626;
+  --input: #262626;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --ring: #6366f1;
+  --backdrop-blur: 0px;
+}
+
+:root[data-theme="glass"] {
+  --background: rgba(15, 15, 30, 0.6);
+  --foreground: #fafafa;
+  --primary: #8b5cf6;
+  --primary-foreground: #ffffff;
+  --muted: rgba(255, 255, 255, 0.05);
+  --muted-foreground: rgba(250, 250, 250, 0.7);
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.06);
+  --accent: rgba(255, 255, 255, 0.10);
+  --accent-foreground: #fafafa;
+  --destructive: #f43f5e;
+  --destructive-foreground: #ffffff;
+  --ring: #8b5cf6;
+  --backdrop-blur: 16px;
+}
+
+/* Subtle ambient gradient overlay for visual interest on all themes.
+ * Tinted from --primary at low alpha; most visible on dark/glass, quiet wash on light. */
+body {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 70% 50% at 75% 20%,
+      color-mix(in srgb, var(--primary) 8%, transparent), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 15% 85%,
+      color-mix(in srgb, var(--primary) 6%, transparent), transparent 60%);
+  color: var(--foreground);
+}

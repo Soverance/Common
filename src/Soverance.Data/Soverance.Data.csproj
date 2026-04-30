@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Soverance.Data</PackageId>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Description>EF Core relational DbContext base and entity configurations for Soverance applications. Pair with Soverance.Data.SqlServer or Soverance.Data.Postgres for the database provider.</Description>
     <PackageTags>soverance data efcore</PackageTags>
   </PropertyGroup>

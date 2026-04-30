@@ -18,28 +18,39 @@ public abstract class SoveranceDbContextBase : DbContext, IDataProtectionKeyCont
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SoveranceDbContextBase).Assembly);
 
-        // Provider-specific filtered unique indexes.
+        // ApiKey and OAuth unique indexes are declared here (not in
+        // UserConfiguration) so that SQL-Server-specific filters can be
+        // attached conditionally without EF Core treating them as separate
+        // indexes. EF Core does NOT merge HasIndex declarations across
+        // IEntityTypeConfiguration and OnModelCreating even when the
+        // property expression is identical — declaring the index in both
+        // places produces a duplicate. Single declaration here keeps the
+        // model snapshot clean for all providers.
+        var apiKeyIndex = modelBuilder.Entity<User>()
+            .HasIndex(u => u.ApiKey)
+            .IsUnique();
+        var oauthIndex = modelBuilder.Entity<User>()
+            .HasIndex(u => new { u.OAuthProvider, u.OAuthId })
+            .IsUnique();
+
         // SQL Server treats NULL values in unique indexes as equal, so we need
         // explicit filters to allow multiple users with NULL ApiKey or NULL OAuth
-        // identifiers. PostgreSQL and SQLite both treat NULLs as distinct in
-        // unique indexes by default — their default behavior matches the intent,
-        // so they receive no filter.
+        // identifiers. PostgreSQL and SQLite treat NULLs as distinct in unique
+        // indexes by default — their default behavior matches the intent, so
+        // they receive no filter.
         //
-        // We detect provider via a substring match on the runtime ProviderName
-        // (e.g., "Microsoft.EntityFrameworkCore.SqlServer", "Npgsql.EntityFrameworkCore.PostgreSQL")
-        // to avoid taking dependencies on either provider package from the core
-        // library. This is a heuristic; any provider whose name contains "SqlServer"
-        // will receive the filter, which is the correct behavior for any
-        // T-SQL-compatible provider.
+        // We detect the provider via a substring match on the runtime
+        // ProviderName (e.g., "Microsoft.EntityFrameworkCore.SqlServer",
+        // "Npgsql.EntityFrameworkCore.PostgreSQL") to avoid taking dependencies
+        // on either provider package from this core library. This is a
+        // heuristic; any provider whose name contains "SqlServer" will receive
+        // the filter, which is the correct behavior for any T-SQL-compatible
+        // provider.
         var provider = Database.ProviderName ?? string.Empty;
         if (provider.Contains("SqlServer", StringComparison.Ordinal))
         {
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.ApiKey)
-                .HasFilter("[ApiKey] IS NOT NULL");
-            modelBuilder.Entity<User>()
-                .HasIndex(u => new { u.OAuthProvider, u.OAuthId })
-                .HasFilter("[OAuthProvider] IS NOT NULL AND [OAuthId] IS NOT NULL");
+            apiKeyIndex.HasFilter("[ApiKey] IS NOT NULL");
+            oauthIndex.HasFilter("[OAuthProvider] IS NOT NULL AND [OAuthId] IS NOT NULL");
         }
 
         base.OnModelCreating(modelBuilder);

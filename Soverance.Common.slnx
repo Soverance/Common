@@ -1,7 +1,10 @@
 <Solution>
   <Project Path="src/Soverance.Auth/Soverance.Auth.csproj" />
   <Project Path="src/Soverance.Data/Soverance.Data.csproj" />
+  <Project Path="src/Soverance.Data.SqlServer/Soverance.Data.SqlServer.csproj" />
+  <Project Path="src/Soverance.Data.Postgres/Soverance.Data.Postgres.csproj" />
   <Project Path="src/Soverance.Forum/Soverance.Forum.csproj" />
   <Project Path="tests/Soverance.Forum.Tests/Soverance.Forum.Tests.csproj" />
   <Project Path="tests/Soverance.Auth.Tests/Soverance.Auth.Tests.csproj" />
+  <Project Path="tests/Soverance.Data.Postgres.Tests/Soverance.Data.Postgres.Tests.csproj" />
 </Solution>

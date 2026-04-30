@@ -1,11 +1,23 @@
 {
   "name": "@soverance/web",
-  "version": "1.0.0",
-  "description": "Shared React/TypeScript components for Soverance applications",
+  "version": "1.1.0",
+  "description": "Shared React/TypeScript components and theming for Soverance applications",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./glass": {
+      "types": "./dist/glass.d.ts",
+      "default": "./dist/glass.js"
+    },
+    "./themes/themes.css": "./themes/themes.css"
+  },
   "files": [
-    "dist"
+    "dist",
+    "themes"
   ],
   "scripts": {
     "build": "tsc"
@@ -21,11 +33,20 @@
   "license": "MIT",
   "peerDependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "three": "^0.183.0",
+    "@react-three/fiber": "^9.0.0"
+  },
+  "peerDependenciesMeta": {
+    "three": { "optional": true },
+    "@react-three/fiber": { "optional": true }
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.183.0",
+    "@react-three/fiber": "^9.5.0",
+    "three": "^0.183.0",
     "typescript": "~5.8.0"
   }
 }

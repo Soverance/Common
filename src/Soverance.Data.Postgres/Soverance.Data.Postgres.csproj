@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Soverance.Data.Postgres</PackageId>
+    <Version>1.0.0</Version>
+    <Description>PostgreSQL provider extension for Soverance.Data (Npgsql)</Description>
+    <PackageTags>soverance data efcore postgres npgsql</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <PackageReference Include="Soverance.Data" Version="1.1.0" />
+  </ItemGroup>
+
+</Project>

@@ -11,10 +11,8 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(u => u.Id);
         builder.HasIndex(u => u.Email).IsUnique();
         builder.HasIndex(u => u.Username).IsUnique();
-        builder.HasIndex(u => u.ApiKey).IsUnique().HasFilter("[ApiKey] IS NOT NULL");
-        builder.HasIndex(u => new { u.OAuthProvider, u.OAuthId })
-            .IsUnique()
-            .HasFilter("[OAuthProvider] IS NOT NULL AND [OAuthId] IS NOT NULL");
+        builder.HasIndex(u => u.ApiKey).IsUnique();
+        builder.HasIndex(u => new { u.OAuthProvider, u.OAuthId }).IsUnique();
 
         builder.Property(u => u.Email).HasMaxLength(256).IsRequired();
         builder.Property(u => u.Username).HasMaxLength(64).IsRequired();

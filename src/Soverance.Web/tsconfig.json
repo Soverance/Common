@@ -14,5 +14,5 @@
     "esModuleInterop": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
-  "include": ["index.ts", "components", "types"]
+  "include": ["index.ts", "glass.ts", "components", "types", "theme"]
 }

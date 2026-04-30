@@ -50,13 +50,17 @@ jobs:
           DATA_VERSION=$(get_version "data")
           FORUM_VERSION=$(get_version "forum")
           WEB_VERSION=$(get_version "web")
+          SQLSERVER_VERSION=$(get_version "sqlserver")
+          POSTGRES_VERSION=$(get_version "postgres")
 
           echo "auth_version=$AUTH_VERSION" >> "$GITHUB_OUTPUT"
           echo "data_version=$DATA_VERSION" >> "$GITHUB_OUTPUT"
           echo "forum_version=$FORUM_VERSION" >> "$GITHUB_OUTPUT"
           echo "web_version=$WEB_VERSION" >> "$GITHUB_OUTPUT"
+          echo "sqlserver_version=$SQLSERVER_VERSION" >> "$GITHUB_OUTPUT"
+          echo "postgres_version=$POSTGRES_VERSION" >> "$GITHUB_OUTPUT"
 
-          echo "Auth: $AUTH_VERSION, Data: $DATA_VERSION, Forum: $FORUM_VERSION, Web: $WEB_VERSION"
+          echo "Auth: $AUTH_VERSION, Data: $DATA_VERSION, Forum: $FORUM_VERSION, Web: $WEB_VERSION, SqlServer: $SQLSERVER_VERSION, Postgres: $POSTGRES_VERSION"
 
       - name: Checkout consumer repo
         uses: actions/checkout@v4
@@ -84,6 +88,8 @@ jobs:
             update_package "$proj" "Soverance.Auth" "${{ steps.versions.outputs.auth_version }}"
             update_package "$proj" "Soverance.Data" "${{ steps.versions.outputs.data_version }}"
             update_package "$proj" "Soverance.Forum" "${{ steps.versions.outputs.forum_version }}"
+            update_package "$proj" "Soverance.Data.SqlServer" "${{ steps.versions.outputs.sqlserver_version }}"
+            update_package "$proj" "Soverance.Data.Postgres" "${{ steps.versions.outputs.postgres_version }}"
           done
 
       - name: Update npm package references
@@ -125,6 +131,8 @@ jobs:
             | Soverance.Auth | ${{ steps.versions.outputs.auth_version }} |
             | Soverance.Data | ${{ steps.versions.outputs.data_version }} |
             | Soverance.Forum | ${{ steps.versions.outputs.forum_version }} |
+            | Soverance.Data.SqlServer | ${{ steps.versions.outputs.sqlserver_version }} |
+            | Soverance.Data.Postgres | ${{ steps.versions.outputs.postgres_version }} |
             | @soverance/web | ${{ steps.versions.outputs.web_version }} |
 
             Triggered by: ${{ github.event.workflow_run.head_commit.message }}

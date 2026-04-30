@@ -1,6 +1,7 @@
 # Publishes NuGet packages to GitHub Packages when their source changes.
 # Detects which packages changed and only publishes those.
 # Auth changes also trigger a Data republish (dependency chain).
+# Data changes also trigger SqlServer and Postgres republishes (companion packages).
 
 name: Publish NuGet Packages
 
@@ -21,6 +22,8 @@ jobs:
       auth_changed: ${{ steps.changes.outputs.auth_changed }}
       data_changed: ${{ steps.changes.outputs.data_changed }}
       forum_changed: ${{ steps.changes.outputs.forum_changed }}
+      sqlserver_changed: ${{ steps.changes.outputs.sqlserver_changed }}
+      postgres_changed: ${{ steps.changes.outputs.postgres_changed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,11 +36,15 @@ jobs:
           AUTH_CHANGED=false
           DATA_CHANGED=false
           FORUM_CHANGED=false
+          SQLSERVER_CHANGED=false
+          POSTGRES_CHANGED=false
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             AUTH_CHANGED=true
             DATA_CHANGED=true
             FORUM_CHANGED=true
+            SQLSERVER_CHANGED=true
+            POSTGRES_CHANGED=true
           else
             CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
 
@@ -50,20 +57,36 @@ jobs:
             if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Forum/'; then
               FORUM_CHANGED=true
             fi
+            if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Data\.SqlServer/'; then
+              SQLSERVER_CHANGED=true
+            fi
+            if echo "$CHANGED_FILES" | grep -q '^src/Soverance\.Data\.Postgres/'; then
+              POSTGRES_CHANGED=true
+            fi
 
             # Dependency chain: Auth changes require Data republish
             if [ "$AUTH_CHANGED" = "true" ]; then
               DATA_CHANGED=true
+            fi
+
+            # Dependency chain: Data changes require SqlServer and Postgres republish
+            if [ "$DATA_CHANGED" = "true" ]; then
+              SQLSERVER_CHANGED=true
+              POSTGRES_CHANGED=true
             fi
           fi
 
           echo "auth_changed=$AUTH_CHANGED" >> "$GITHUB_OUTPUT"
           echo "data_changed=$DATA_CHANGED" >> "$GITHUB_OUTPUT"
           echo "forum_changed=$FORUM_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "sqlserver_changed=$SQLSERVER_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "postgres_changed=$POSTGRES_CHANGED" >> "$GITHUB_OUTPUT"
 
           echo "Auth changed: $AUTH_CHANGED"
           echo "Data changed: $DATA_CHANGED"
           echo "Forum changed: $FORUM_CHANGED"
+          echo "SqlServer changed: $SQLSERVER_CHANGED"
+          echo "Postgres changed: $POSTGRES_CHANGED"
 
   publish-auth:
     name: Publish Soverance.Auth
@@ -87,15 +110,26 @@ jobs:
         id: version
         run: |
           LATEST_TAG=$(git tag -l 'auth/v*' --sort=-v:refname | head -n 1)
+          LATEST_VERSION=""
+          if [ -n "$LATEST_TAG" ]; then
+            LATEST_VERSION="${LATEST_TAG#auth/v}"
+          fi
+
+          DECLARED_VERSION=$(grep -oP '<Version>\K[^<]+' src/Soverance.Auth/Soverance.Auth.csproj | head -n 1)
+
           if [ -z "$LATEST_TAG" ]; then
-            VERSION="1.0.0"
+            VERSION="${DECLARED_VERSION:-1.0.0}"
           else
-            CURRENT="${LATEST_TAG#auth/v}"
-            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
-            MINOR=$(echo "$CURRENT" | cut -d. -f2)
-            PATCH=$(echo "$CURRENT" | cut -d. -f3)
-            PATCH=$((PATCH + 1))
-            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            HIGHER=$(printf '%s\n%s\n' "$LATEST_VERSION" "$DECLARED_VERSION" | sort -V | tail -n 1)
+            if [ -n "$DECLARED_VERSION" ] && [ "$HIGHER" = "$DECLARED_VERSION" ] && [ "$DECLARED_VERSION" != "$LATEST_VERSION" ]; then
+              VERSION="$DECLARED_VERSION"
+            else
+              MAJOR=$(echo "$LATEST_VERSION" | cut -d. -f1)
+              MINOR=$(echo "$LATEST_VERSION" | cut -d. -f2)
+              PATCH=$(echo "$LATEST_VERSION" | cut -d. -f3)
+              PATCH=$((PATCH + 1))
+              VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            fi
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing Soverance.Auth v$VERSION"
@@ -144,15 +178,26 @@ jobs:
         id: version
         run: |
           LATEST_TAG=$(git tag -l 'data/v*' --sort=-v:refname | head -n 1)
+          LATEST_VERSION=""
+          if [ -n "$LATEST_TAG" ]; then
+            LATEST_VERSION="${LATEST_TAG#data/v}"
+          fi
+
+          DECLARED_VERSION=$(grep -oP '<Version>\K[^<]+' src/Soverance.Data/Soverance.Data.csproj | head -n 1)
+
           if [ -z "$LATEST_TAG" ]; then
-            VERSION="1.0.0"
+            VERSION="${DECLARED_VERSION:-1.0.0}"
           else
-            CURRENT="${LATEST_TAG#data/v}"
-            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
-            MINOR=$(echo "$CURRENT" | cut -d. -f2)
-            PATCH=$(echo "$CURRENT" | cut -d. -f3)
-            PATCH=$((PATCH + 1))
-            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            HIGHER=$(printf '%s\n%s\n' "$LATEST_VERSION" "$DECLARED_VERSION" | sort -V | tail -n 1)
+            if [ -n "$DECLARED_VERSION" ] && [ "$HIGHER" = "$DECLARED_VERSION" ] && [ "$DECLARED_VERSION" != "$LATEST_VERSION" ]; then
+              VERSION="$DECLARED_VERSION"
+            else
+              MAJOR=$(echo "$LATEST_VERSION" | cut -d. -f1)
+              MINOR=$(echo "$LATEST_VERSION" | cut -d. -f2)
+              PATCH=$(echo "$LATEST_VERSION" | cut -d. -f3)
+              PATCH=$((PATCH + 1))
+              VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            fi
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing Soverance.Data v$VERSION"
@@ -198,6 +243,184 @@ jobs:
           git tag "data/v${{ steps.version.outputs.version }}"
           git push origin "data/v${{ steps.version.outputs.version }}"
 
+  publish-sqlserver:
+    name: Publish Soverance.Data.SqlServer
+    needs: [detect-changes, publish-data]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.sqlserver_changed == 'true' &&
+      (needs.publish-data.result == 'success' || needs.publish-data.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10.0 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Determine version
+        id: version
+        run: |
+          LATEST_TAG=$(git tag -l 'sqlserver/v*' --sort=-v:refname | head -n 1)
+          LATEST_VERSION=""
+          if [ -n "$LATEST_TAG" ]; then
+            LATEST_VERSION="${LATEST_TAG#sqlserver/v}"
+          fi
+
+          DECLARED_VERSION=$(grep -oP '<Version>\K[^<]+' src/Soverance.Data.SqlServer/Soverance.Data.SqlServer.csproj | head -n 1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="${DECLARED_VERSION:-1.0.0}"
+          else
+            HIGHER=$(printf '%s\n%s\n' "$LATEST_VERSION" "$DECLARED_VERSION" | sort -V | tail -n 1)
+            if [ -n "$DECLARED_VERSION" ] && [ "$HIGHER" = "$DECLARED_VERSION" ] && [ "$DECLARED_VERSION" != "$LATEST_VERSION" ]; then
+              VERSION="$DECLARED_VERSION"
+            else
+              MAJOR=$(echo "$LATEST_VERSION" | cut -d. -f1)
+              MINOR=$(echo "$LATEST_VERSION" | cut -d. -f2)
+              PATCH=$(echo "$LATEST_VERSION" | cut -d. -f3)
+              PATCH=$((PATCH + 1))
+              VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing Soverance.Data.SqlServer v$VERSION"
+
+      - name: Update Data dependency version
+        if: needs.publish-data.outputs.version != ''
+        run: |
+          DATA_VERSION=${{ needs.publish-data.outputs.version }}
+          sed -i "s|<PackageReference Include=\"Soverance.Data\" Version=\"[^\"]*\"|<PackageReference Include=\"Soverance.Data\" Version=\"$DATA_VERSION\"|" \
+            src/Soverance.Data.SqlServer/Soverance.Data.SqlServer.csproj
+
+      - name: Wait for Data package to be indexed on NuGet.org
+        if: needs.publish-data.outputs.version != ''
+        run: |
+          DATA_VERSION=${{ needs.publish-data.outputs.version }}
+          echo "Waiting for Soverance.Data v$DATA_VERSION to appear on NuGet.org..."
+          for i in $(seq 1 30); do
+            if curl -sf "https://api.nuget.org/v3-flatcontainer/soverance.data/${DATA_VERSION}/soverance.data.${DATA_VERSION}.nupkg" -o /dev/null 2>&1; then
+              echo "Package available after ~$((i * 10)) seconds"
+              break
+            fi
+            echo "Attempt $i/30 - not yet available, waiting 10s..."
+            sleep 10
+          done
+
+      - name: Pack
+        run: >
+          dotnet pack src/Soverance.Data.SqlServer/Soverance.Data.SqlServer.csproj
+          --configuration Release
+          -p:Version=${{ steps.version.outputs.version }}
+          --output ./nupkg
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push ./nupkg/Soverance.Data.SqlServer.*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source "https://api.nuget.org/v3/index.json"
+          --skip-duplicate
+
+      - name: Create and push tag
+        run: |
+          git tag "sqlserver/v${{ steps.version.outputs.version }}"
+          git push origin "sqlserver/v${{ steps.version.outputs.version }}"
+
+  publish-postgres:
+    name: Publish Soverance.Data.Postgres
+    needs: [detect-changes, publish-data]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.postgres_changed == 'true' &&
+      (needs.publish-data.result == 'success' || needs.publish-data.result == 'skipped')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10.0 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Determine version
+        id: version
+        run: |
+          LATEST_TAG=$(git tag -l 'postgres/v*' --sort=-v:refname | head -n 1)
+          LATEST_VERSION=""
+          if [ -n "$LATEST_TAG" ]; then
+            LATEST_VERSION="${LATEST_TAG#postgres/v}"
+          fi
+
+          DECLARED_VERSION=$(grep -oP '<Version>\K[^<]+' src/Soverance.Data.Postgres/Soverance.Data.Postgres.csproj | head -n 1)
+
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="${DECLARED_VERSION:-1.0.0}"
+          else
+            HIGHER=$(printf '%s\n%s\n' "$LATEST_VERSION" "$DECLARED_VERSION" | sort -V | tail -n 1)
+            if [ -n "$DECLARED_VERSION" ] && [ "$HIGHER" = "$DECLARED_VERSION" ] && [ "$DECLARED_VERSION" != "$LATEST_VERSION" ]; then
+              VERSION="$DECLARED_VERSION"
+            else
+              MAJOR=$(echo "$LATEST_VERSION" | cut -d. -f1)
+              MINOR=$(echo "$LATEST_VERSION" | cut -d. -f2)
+              PATCH=$(echo "$LATEST_VERSION" | cut -d. -f3)
+              PATCH=$((PATCH + 1))
+              VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            fi
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing Soverance.Data.Postgres v$VERSION"
+
+      - name: Update Data dependency version
+        if: needs.publish-data.outputs.version != ''
+        run: |
+          DATA_VERSION=${{ needs.publish-data.outputs.version }}
+          sed -i "s|<PackageReference Include=\"Soverance.Data\" Version=\"[^\"]*\"|<PackageReference Include=\"Soverance.Data\" Version=\"$DATA_VERSION\"|" \
+            src/Soverance.Data.Postgres/Soverance.Data.Postgres.csproj
+
+      - name: Wait for Data package to be indexed on NuGet.org
+        if: needs.publish-data.outputs.version != ''
+        run: |
+          DATA_VERSION=${{ needs.publish-data.outputs.version }}
+          echo "Waiting for Soverance.Data v$DATA_VERSION to appear on NuGet.org..."
+          for i in $(seq 1 30); do
+            if curl -sf "https://api.nuget.org/v3-flatcontainer/soverance.data/${DATA_VERSION}/soverance.data.${DATA_VERSION}.nupkg" -o /dev/null 2>&1; then
+              echo "Package available after ~$((i * 10)) seconds"
+              break
+            fi
+            echo "Attempt $i/30 - not yet available, waiting 10s..."
+            sleep 10
+          done
+
+      - name: Pack
+        run: >
+          dotnet pack src/Soverance.Data.Postgres/Soverance.Data.Postgres.csproj
+          --configuration Release
+          -p:Version=${{ steps.version.outputs.version }}
+          --output ./nupkg
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push ./nupkg/Soverance.Data.Postgres.*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source "https://api.nuget.org/v3/index.json"
+          --skip-duplicate
+
+      - name: Create and push tag
+        run: |
+          git tag "postgres/v${{ steps.version.outputs.version }}"
+          git push origin "postgres/v${{ steps.version.outputs.version }}"
+
   publish-forum:
     name: Publish Soverance.Forum
     needs: detect-changes
@@ -220,15 +443,26 @@ jobs:
         id: version
         run: |
           LATEST_TAG=$(git tag -l 'forum/v*' --sort=-v:refname | head -n 1)
+          LATEST_VERSION=""
+          if [ -n "$LATEST_TAG" ]; then
+            LATEST_VERSION="${LATEST_TAG#forum/v}"
+          fi
+
+          DECLARED_VERSION=$(grep -oP '<Version>\K[^<]+' src/Soverance.Forum/Soverance.Forum.csproj | head -n 1)
+
           if [ -z "$LATEST_TAG" ]; then
-            VERSION="1.0.0"
+            VERSION="${DECLARED_VERSION:-1.0.0}"
           else
-            CURRENT="${LATEST_TAG#forum/v}"
-            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
-            MINOR=$(echo "$CURRENT" | cut -d. -f2)
-            PATCH=$(echo "$CURRENT" | cut -d. -f3)
-            PATCH=$((PATCH + 1))
-            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            HIGHER=$(printf '%s\n%s\n' "$LATEST_VERSION" "$DECLARED_VERSION" | sort -V | tail -n 1)
+            if [ -n "$DECLARED_VERSION" ] && [ "$HIGHER" = "$DECLARED_VERSION" ] && [ "$DECLARED_VERSION" != "$LATEST_VERSION" ]; then
+              VERSION="$DECLARED_VERSION"
+            else
+              MAJOR=$(echo "$LATEST_VERSION" | cut -d. -f1)
+              MINOR=$(echo "$LATEST_VERSION" | cut -d. -f2)
+              PATCH=$(echo "$LATEST_VERSION" | cut -d. -f3)
+              PATCH=$((PATCH + 1))
+              VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            fi
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Publishing Soverance.Forum v$VERSION"

@@ -59,3 +59,8 @@ public class UpdateDefaultServerRequest
 {
     public string? Server { get; set; }
 }
+
+public class UpdateDisplayNameRequest
+{
+    public string? DisplayName { get; set; }
+}

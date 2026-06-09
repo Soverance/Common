@@ -21,7 +21,7 @@ public class OAuthAccountLinkerTests : IDisposable
         _db = new TestDbContext(options);
         _db.Database.OpenConnection();
         _db.Database.EnsureCreated();
-        _sut = new OAuthAccountLinker(NullLogger<OAuthAccountLinker>.Instance);
+        _sut = new OAuthAccountLinker(NullLogger<OAuthAccountLinker>.Instance, new UsernameGenerator());
     }
 
     public void Dispose()
@@ -59,14 +59,14 @@ public class OAuthAccountLinkerTests : IDisposable
     }
 
     [Fact]
-    public async Task LinkOrCreate_Path1_RefreshesAvatarAndDisplayNameIfProviderReturnsNonNull()
+    public async Task LinkOrCreate_Path1_PreservesCustomDisplayName_ButRefreshesAvatar()
     {
         var existing = new User
         {
             Id = Guid.NewGuid(),
             Email = "alice@example.com",
-            Username = "alice@example.com",
-            DisplayName = "OldName",
+            Username = "alice",
+            DisplayName = "AldoCustom",
             AvatarUrl = "https://old/avatar",
             OAuthProvider = "google",
             OAuthId = "g-1",
@@ -78,12 +78,38 @@ public class OAuthAccountLinkerTests : IDisposable
         await _db.SaveChangesAsync();
 
         await _sut.LinkOrCreateAsync(
-            Info("google", "g-1", "alice@example.com", "NewName", "https://new/avatar"),
+            Info("google", "g-1", "alice@example.com", "GoogleName", "https://new/avatar"),
             _db);
 
         var refreshed = await _db.Users.FirstAsync();
-        Assert.Equal("NewName", refreshed.DisplayName);
-        Assert.Equal("https://new/avatar", refreshed.AvatarUrl);
+        Assert.Equal("AldoCustom", refreshed.DisplayName);       // not clobbered
+        Assert.Equal("https://new/avatar", refreshed.AvatarUrl);  // still refreshed
+    }
+
+    [Fact]
+    public async Task LinkOrCreate_Path1_SetsDisplayName_WhenEmpty()
+    {
+        var existing = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "alice@example.com",
+            Username = "alice",
+            DisplayName = null,
+            OAuthProvider = "google",
+            OAuthId = "g-1",
+            Role = UserRole.Member,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        _db.Users.Add(existing);
+        await _db.SaveChangesAsync();
+
+        await _sut.LinkOrCreateAsync(
+            Info("google", "g-1", "alice@example.com", "GoogleName", null),
+            _db);
+
+        var refreshed = await _db.Users.FirstAsync();
+        Assert.Equal("GoogleName", refreshed.DisplayName);
     }
 
     [Fact]
@@ -199,12 +225,25 @@ public class OAuthAccountLinkerTests : IDisposable
 
         Assert.NotEqual(Guid.Empty, result.Id);
         Assert.Equal("eve@example.com", result.Email);
-        Assert.Equal("eve@example.com", result.Username);
+        Assert.DoesNotContain("@", result.Username);
+        Assert.Equal("eve", result.Username);
         Assert.Equal("Eve", result.DisplayName);
         Assert.Equal("https://avatar/eve", result.AvatarUrl);
         Assert.Equal("google", result.OAuthProvider);
         Assert.Equal("g-eve", result.OAuthId);
         Assert.Equal(UserRole.Member, result.Role);
         Assert.Equal(1, await _db.Users.CountAsync());
+    }
+
+    [Fact]
+    public async Task LinkOrCreate_Path4_NewUser_GeneratesHandleNotEmail()
+    {
+        var result = await _sut.LinkOrCreateAsync(
+            Info("google", "g-new", "Jane.Roe@gmail.com", "Jane", "https://avatar/jane"),
+            _db);
+
+        Assert.DoesNotContain("@", result.Username);
+        Assert.Equal("jane.roe", result.Username);
+        Assert.Equal("Jane", result.DisplayName);
     }
 }

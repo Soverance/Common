@@ -9,10 +9,12 @@ namespace Soverance.Auth.Services;
 public sealed class OAuthAccountLinker : IOAuthAccountLinker
 {
     private readonly ILogger<OAuthAccountLinker> _logger;
+    private readonly IUsernameGenerator _usernameGenerator;
 
-    public OAuthAccountLinker(ILogger<OAuthAccountLinker> logger)
+    public OAuthAccountLinker(ILogger<OAuthAccountLinker> logger, IUsernameGenerator usernameGenerator)
     {
         _logger = logger;
+        _usernameGenerator = usernameGenerator;
     }
 
     public async Task<User> LinkOrCreateAsync(
@@ -31,7 +33,9 @@ public sealed class OAuthAccountLinker : IOAuthAccountLinker
         {
             if (info.AvatarUrl is not null)
                 existing.AvatarUrl = info.AvatarUrl;
-            if (!string.IsNullOrEmpty(info.Name))
+            // Only seed the provider name as an initial default — never overwrite a
+            // value the user has customized via their profile.
+            if (!string.IsNullOrEmpty(info.Name) && string.IsNullOrEmpty(existing.DisplayName))
                 existing.DisplayName = info.Name;
             existing.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(cancellationToken);
@@ -70,7 +74,7 @@ public sealed class OAuthAccountLinker : IOAuthAccountLinker
         {
             Id = Guid.NewGuid(),
             Email = info.Email,
-            Username = info.Email,
+            Username = await _usernameGenerator.GenerateAsync(info.Email, db, cancellationToken),
             DisplayName = info.Name,
             AvatarUrl = info.AvatarUrl,
             OAuthProvider = info.Provider,

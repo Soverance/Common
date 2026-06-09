@@ -104,6 +104,7 @@ public static class AuthExtensions
             .Bind(configuration.GetSection(sectionName));
         services.AddHttpClient();
         services.AddScoped<IOAuthService, OAuthService>();
+        services.AddSingleton<IUsernameGenerator, UsernameGenerator>();
         services.AddScoped<IOAuthAccountLinker, OAuthAccountLinker>();
         services.TryAddScoped<AuthResponseService>();
         return services;

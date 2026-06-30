@@ -29,6 +29,9 @@ public abstract class SoveranceDbContextBase : DbContext, IDataProtectionKeyCont
         var apiKeyIndex = modelBuilder.Entity<User>()
             .HasIndex(u => u.ApiKey)
             .IsUnique();
+        var apiKeyLookupIndex = modelBuilder.Entity<User>()
+            .HasIndex(u => u.ApiKeyLookup)
+            .IsUnique();
         var oauthIndex = modelBuilder.Entity<User>()
             .HasIndex(u => new { u.OAuthProvider, u.OAuthId })
             .IsUnique();
@@ -50,6 +53,7 @@ public abstract class SoveranceDbContextBase : DbContext, IDataProtectionKeyCont
         if (provider.Contains("SqlServer", StringComparison.Ordinal))
         {
             apiKeyIndex.HasFilter("[ApiKey] IS NOT NULL");
+            apiKeyLookupIndex.HasFilter("[ApiKeyLookup] IS NOT NULL");
             oauthIndex.HasFilter("[OAuthProvider] IS NOT NULL AND [OAuthId] IS NOT NULL");
         }
 

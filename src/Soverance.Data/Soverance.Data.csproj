@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Soverance.Data</PackageId>
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
     <Description>EF Core relational DbContext base and entity configurations for Soverance applications. Pair with Soverance.Data.SqlServer or Soverance.Data.Postgres for the database provider.</Description>
     <PackageTags>soverance data efcore</PackageTags>
   </PropertyGroup>
@@ -18,7 +18,10 @@
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.5" />
-    <PackageReference Include="Soverance.Auth" Version="1.1.0" />
+    <!-- DEV ONLY: ProjectReference so this builds against the local Soverance.Auth source
+         (with User.ApiKeyLookup). Reverted to <PackageReference Include="Soverance.Auth"
+         Version="1.3.0" /> at release (the published package the consumers get). -->
+    <ProjectReference Include="..\Soverance.Auth\Soverance.Auth.csproj" />
   </ItemGroup>
 
 </Project>

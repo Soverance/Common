@@ -9,6 +9,9 @@ public class User
     public string? PasswordHash { get; set; }
     public string? ApiKey { get; set; }
     public DateTimeOffset? ApiKeyCreatedAt { get; set; }
+    /// <summary>Deterministic SHA-256 lookup hash of the raw API key, for O(1) indexed auth.
+    /// Null for keys generated before this existed (self-healed on first authentication).</summary>
+    public string? ApiKeyLookup { get; set; }
     public string? AvatarUrl { get; set; }
     public string? OAuthProvider { get; set; }
     public string? OAuthId { get; set; }

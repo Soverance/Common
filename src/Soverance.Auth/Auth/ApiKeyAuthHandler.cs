@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Soverance.Auth.Models;
 
 namespace Soverance.Auth.Auth;
 
@@ -28,17 +27,9 @@ public class ApiKeyAuthHandler : AuthenticationHandler<AuthenticationSchemeOptio
         if (string.IsNullOrEmpty(apiKey))
             return AuthenticateResult.NoResult();
 
-        // Resolve the app's registered DbContext from the request scope.
-        // Works because both apps register their derived SoveranceDbContextBase via AddSoveranceSqlServer<T>(),
-        // which also registers it as DbContext.
         var db = Context.RequestServices.GetRequiredService<DbContext>();
 
-        var usersWithKeys = await db.Set<User>()
-            .Where(u => u.ApiKey != null)
-            .ToListAsync();
-
-        var user = usersWithKeys.FirstOrDefault(u =>
-            BCrypt.Net.BCrypt.Verify(apiKey, u.ApiKey));
+        var user = await ApiKeyUserResolver.ResolveAsync(db, apiKey, Logger);
         if (user is null)
             return AuthenticateResult.Fail("Invalid API key");
 

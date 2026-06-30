@@ -24,7 +24,7 @@ public static class ApiKeyUserResolver
         var legacy = await db.Set<User>()
             .Where(u => u.ApiKey != null && u.ApiKeyLookup == null)
             .ToListAsync();
-        user = legacy.AsParallel().FirstOrDefault(u => BCrypt.Net.BCrypt.Verify(apiKey, u.ApiKey!));
+        user = legacy.AsParallel().FirstOrDefault(u => SafeVerify(apiKey, u.ApiKey!));
         if (user is null) return null;
 
         try
@@ -38,5 +38,13 @@ public static class ApiKeyUserResolver
             logger?.LogWarning(ex, "API key lookup backfill failed for user {UserId}", user.Id);
         }
         return user;
+    }
+
+    // A malformed/legacy stored hash must not poison the transitional scan: treat any
+    // BCrypt parse error as a non-match rather than letting it fail the whole request.
+    private static bool SafeVerify(string apiKey, string storedHash)
+    {
+        try { return BCrypt.Net.BCrypt.Verify(apiKey, storedHash); }
+        catch { return false; }
     }
 }

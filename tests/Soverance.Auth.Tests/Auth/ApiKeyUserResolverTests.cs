@@ -93,6 +93,28 @@ public class ApiKeyUserResolverTests : IDisposable
     }
 
     [Fact]
+    public async Task A_malformed_legacy_hash_does_not_break_the_fallback_scan()
+    {
+        const string key = "good-key";
+        using (var db = NewDb())
+        {
+            // A legacy row with a corrupt (non-BCrypt) ApiKey hash, ApiKeyLookup null.
+            var bad = MakeUser("bad@test.com");
+            bad.ApiKey = "not-a-valid-bcrypt-hash";
+            db.Add(bad);
+            // A valid legacy row that SHOULD resolve.
+            var good = MakeUser("good@test.com");
+            good.ApiKey = PasswordHasher.HashPassword(key);
+            db.Add(good);
+            await db.SaveChangesAsync();
+        }
+        using var db2 = NewDb();
+        var user = await ApiKeyUserResolver.ResolveAsync(db2, key);
+        Assert.NotNull(user);
+        Assert.Equal("good@test.com", user!.Email);
+    }
+
+    [Fact]
     public async Task Resolves_migrated_user_among_many_legacy_users()
     {
         const string key = "needle-key";

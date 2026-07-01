@@ -50,6 +50,15 @@ public static class OAuthEndpoints
             // Service already logged the upstream details at Warning.
             return Results.BadRequest(new { message = ex.Message });
         }
+        catch (OAuthEmailRequiredException)
+        {
+            // Handshake succeeded but the account has no verified email; the linker
+            // keys on email, so we cannot create/link. Reject with a clear message.
+            return Results.BadRequest(new
+            {
+                message = "Your Discord account needs a verified email address to sign in here."
+            });
+        }
 
         Soverance.Auth.Models.User user;
         try

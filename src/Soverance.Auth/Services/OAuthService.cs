@@ -33,6 +33,7 @@ public sealed class OAuthService : IOAuthService
         {
             "google" => GetGoogleAsync(code, redirectUri, cancellationToken),
             "microsoft" => GetMicrosoftAsync(code, redirectUri, cancellationToken),
+            "discord" => GetDiscordAsync(code, redirectUri, cancellationToken),
             _ => throw new UnsupportedOAuthProviderException(provider)
         };
 
@@ -196,5 +197,90 @@ public sealed class OAuthService : IOAuthService
             Email: email,
             Name: name,
             AvatarUrl: null);
+    }
+
+    private async Task<OAuthUserInfo> GetDiscordAsync(string code, string redirectUri, CancellationToken ct)
+    {
+        var client = _httpClientFactory.CreateClient();
+
+        _logger.LogDebug("OAuth token exchange request {Provider} redirect {RedirectUri}", "discord", redirectUri);
+
+        var tokenResponse = await client.PostAsync(
+            "https://discord.com/api/oauth2/token",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["code"] = code,
+                ["client_id"] = _options.Discord.ClientId,
+                ["client_secret"] = _options.Discord.ClientSecret,
+                ["redirect_uri"] = redirectUri,
+                ["grant_type"] = "authorization_code"
+            }),
+            ct);
+
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            var body = await tokenResponse.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("OAuth provider exchange failed {Provider} {Status} {Body}", "discord", (int)tokenResponse.StatusCode, body);
+            throw new OAuthProviderException("discord", "Failed to authenticate with OAuth provider", (int)tokenResponse.StatusCode, body);
+        }
+
+        OAuthTokenResponse? tokenData;
+        try
+        {
+            tokenData = await JsonSerializer.DeserializeAsync<OAuthTokenResponse>(
+                await tokenResponse.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "OAuth token response malformed JSON {Provider}", "discord");
+            throw new OAuthProviderException("discord", "Failed to authenticate with OAuth provider", inner: ex);
+        }
+
+        if (tokenData is null || string.IsNullOrEmpty(tokenData.AccessToken))
+            throw new OAuthProviderException("discord", "Failed to authenticate with OAuth provider");
+
+        _logger.LogDebug("OAuth userinfo request {Provider}", "discord");
+
+        var infoRequest = new HttpRequestMessage(HttpMethod.Get, "https://discord.com/api/users/@me");
+        infoRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenData.AccessToken);
+        var infoResponse = await client.SendAsync(infoRequest, ct);
+
+        if (!infoResponse.IsSuccessStatusCode)
+        {
+            var body = await infoResponse.Content.ReadAsStringAsync(ct);
+            _logger.LogWarning("OAuth provider exchange failed {Provider} {Status} {Body}", "discord", (int)infoResponse.StatusCode, body);
+            throw new OAuthProviderException("discord", "Failed to authenticate with OAuth provider", (int)infoResponse.StatusCode, body);
+        }
+
+        DiscordUserInfo? user;
+        try
+        {
+            user = await JsonSerializer.DeserializeAsync<DiscordUserInfo>(
+                await infoResponse.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "OAuth userinfo malformed JSON {Provider}", "discord");
+            throw new OAuthProviderException("discord", "Failed to authenticate with OAuth provider", inner: ex);
+        }
+
+        if (user is null)
+            throw new OAuthProviderException("discord", "Failed to authenticate with OAuth provider");
+
+        if (string.IsNullOrEmpty(user.Email) || !user.Verified)
+            throw new OAuthEmailRequiredException("discord");
+
+        var avatarUrl = string.IsNullOrEmpty(user.Avatar)
+            ? null
+            : $"https://cdn.discordapp.com/avatars/{user.Id}/{user.Avatar}.png";
+
+        _logger.LogInformation("OAuth userinfo received {Provider} {ProviderId}", "discord", user.Id);
+
+        return new OAuthUserInfo(
+            Provider: "discord",
+            ProviderId: user.Id,
+            Email: user.Email!,
+            Name: user.GlobalName ?? user.Username,
+            AvatarUrl: avatarUrl);
     }
 }

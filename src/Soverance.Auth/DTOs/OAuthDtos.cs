@@ -29,3 +29,12 @@ internal sealed record MicrosoftUserInfo(
     [property: JsonPropertyName("mail")] string? Mail,
     [property: JsonPropertyName("userPrincipalName")] string? UserPrincipalName,
     [property: JsonPropertyName("displayName")] string? DisplayName);
+
+/// <summary>Userinfo response shape from Discord's /users/@me.</summary>
+internal sealed record DiscordUserInfo(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("username")] string Username,
+    [property: JsonPropertyName("global_name")] string? GlobalName,
+    [property: JsonPropertyName("email")] string? Email,
+    [property: JsonPropertyName("verified")] bool Verified,
+    [property: JsonPropertyName("avatar")] string? Avatar);

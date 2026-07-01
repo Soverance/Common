@@ -14,7 +14,8 @@ public class OAuthServiceTests
         options ??= new OAuthOptions
         {
             Google = new OAuthProviderOptions { ClientId = "g-id", ClientSecret = "g-secret" },
-            Microsoft = new OAuthProviderOptions { ClientId = "m-id", ClientSecret = "m-secret" }
+            Microsoft = new OAuthProviderOptions { ClientId = "m-id", ClientSecret = "m-secret" },
+            Discord = new OAuthProviderOptions { ClientId = "d-id", ClientSecret = "d-secret" }
         };
         var httpClient = new HttpClient(handler);
         var factory = new SingleClientHttpClientFactory(httpClient);
@@ -29,7 +30,8 @@ public class OAuthServiceTests
         options ??= new OAuthOptions
         {
             Google = new OAuthProviderOptions { ClientId = "g-id", ClientSecret = "g-super-secret-value" },
-            Microsoft = new OAuthProviderOptions { ClientId = "m-id", ClientSecret = "m-super-secret-value" }
+            Microsoft = new OAuthProviderOptions { ClientId = "m-id", ClientSecret = "m-super-secret-value" },
+            Discord = new OAuthProviderOptions { ClientId = "d-id", ClientSecret = "d-super-secret-value" }
         };
         var httpClient = new HttpClient(handler);
         var factory = new SingleClientHttpClientFactory(httpClient);
@@ -230,6 +232,104 @@ public class OAuthServiceTests
         var ex = await Assert.ThrowsAsync<Soverance.Auth.Exceptions.UnsupportedOAuthProviderException>(
             () => sut.GetUserInfoAsync("github", "code", "https://callback"));
         Assert.Equal("github", ex.Provider);
+    }
+
+    [Fact]
+    public async Task GetUserInfoAsync_Discord_HappyPath_ReturnsNormalizedUserInfo()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.EnqueueJson(
+            req => req.Method == HttpMethod.Post
+                && req.RequestUri!.ToString() == "https://discord.com/api/oauth2/token",
+            HttpStatusCode.OK,
+            """{"access_token":"at-discord"}""");
+        handler.EnqueueJson(
+            req => req.Method == HttpMethod.Get
+                && req.RequestUri!.ToString() == "https://discord.com/api/users/@me"
+                && req.Headers.Authorization!.Parameter == "at-discord",
+            HttpStatusCode.OK,
+            """{"id":"d-999","username":"frodo","global_name":"Frodo Baggins","email":"frodo@example.com","verified":true,"avatar":"abc123"}""");
+
+        var sut = BuildService(handler);
+
+        var result = await sut.GetUserInfoAsync("discord", "auth-code-d", "https://app/callback");
+
+        Assert.Equal("discord", result.Provider);
+        Assert.Equal("d-999", result.ProviderId);
+        Assert.Equal("frodo@example.com", result.Email);
+        Assert.Equal("Frodo Baggins", result.Name);
+        Assert.Equal("https://cdn.discordapp.com/avatars/d-999/abc123.png", result.AvatarUrl);
+    }
+
+    [Fact]
+    public async Task GetUserInfoAsync_Discord_GlobalNameNull_FallsBackToUsername()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.EnqueueJson(req => req.Method == HttpMethod.Post, HttpStatusCode.OK, """{"access_token":"at"}""");
+        handler.EnqueueJson(req => req.Method == HttpMethod.Get, HttpStatusCode.OK,
+            """{"id":"d1","username":"samwise","global_name":null,"email":"sam@example.com","verified":true,"avatar":null}""");
+
+        var sut = BuildService(handler);
+        var result = await sut.GetUserInfoAsync("discord", "code", "https://callback");
+
+        Assert.Equal("samwise", result.Name);
+    }
+
+    [Fact]
+    public async Task GetUserInfoAsync_Discord_AvatarNull_ReturnsNullAvatarUrl()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.EnqueueJson(req => req.Method == HttpMethod.Post, HttpStatusCode.OK, """{"access_token":"at"}""");
+        handler.EnqueueJson(req => req.Method == HttpMethod.Get, HttpStatusCode.OK,
+            """{"id":"d2","username":"merry","global_name":"Merry","email":"merry@example.com","verified":true,"avatar":null}""");
+
+        var sut = BuildService(handler);
+        var result = await sut.GetUserInfoAsync("discord", "code", "https://callback");
+
+        Assert.Null(result.AvatarUrl);
+    }
+
+    [Fact]
+    public async Task GetUserInfoAsync_Discord_NoEmail_ThrowsOAuthEmailRequiredException()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.EnqueueJson(req => req.Method == HttpMethod.Post, HttpStatusCode.OK, """{"access_token":"at"}""");
+        handler.EnqueueJson(req => req.Method == HttpMethod.Get, HttpStatusCode.OK,
+            """{"id":"d3","username":"pippin","global_name":"Pippin","email":null,"verified":false,"avatar":null}""");
+
+        var sut = BuildService(handler);
+        var ex = await Assert.ThrowsAsync<Soverance.Auth.Exceptions.OAuthEmailRequiredException>(
+            () => sut.GetUserInfoAsync("discord", "code", "https://callback"));
+        Assert.Equal("discord", ex.Provider);
+    }
+
+    [Fact]
+    public async Task GetUserInfoAsync_Discord_UnverifiedEmail_ThrowsOAuthEmailRequiredException()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.EnqueueJson(req => req.Method == HttpMethod.Post, HttpStatusCode.OK, """{"access_token":"at"}""");
+        handler.EnqueueJson(req => req.Method == HttpMethod.Get, HttpStatusCode.OK,
+            """{"id":"d4","username":"gollum","global_name":null,"email":"gollum@example.com","verified":false,"avatar":null}""");
+
+        var sut = BuildService(handler);
+        await Assert.ThrowsAsync<Soverance.Auth.Exceptions.OAuthEmailRequiredException>(
+            () => sut.GetUserInfoAsync("discord", "code", "https://callback"));
+    }
+
+    [Fact]
+    public async Task GetUserInfoAsync_Discord_TokenExchange400_ThrowsOAuthProviderException()
+    {
+        var handler = new StubHttpMessageHandler();
+        handler.EnqueueRaw(
+            req => req.RequestUri!.ToString() == "https://discord.com/api/oauth2/token",
+            HttpStatusCode.BadRequest,
+            """{"error":"invalid_grant"}""");
+
+        var sut = BuildService(handler);
+        var ex = await Assert.ThrowsAsync<Soverance.Auth.Exceptions.OAuthProviderException>(
+            () => sut.GetUserInfoAsync("discord", "bad-code", "https://callback"));
+        Assert.Equal("discord", ex.Provider);
+        Assert.Equal(400, ex.UpstreamStatusCode);
     }
 
     [Fact]

@@ -9,6 +9,7 @@ public sealed class OAuthOptions
 {
     public OAuthProviderOptions Google { get; set; } = new();
     public OAuthProviderOptions Microsoft { get; set; } = new();
+    public OAuthProviderOptions Discord { get; set; } = new();
 }
 
 public sealed class OAuthProviderOptions
